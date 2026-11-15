@@ -1,0 +1,4095 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sky Researcher · NASA Space Apps Challenge 2026</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Overpass:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-void: #030712;
+        --bg-deep: #060d20;
+        --glass-surface: rgba(14, 26, 56, 0.42);
+        --glass-elevated: rgba(20, 38, 78, 0.52);
+        --glass-strong: rgba(8, 16, 36, 0.76);
+        --glass-border: rgba(130, 190, 255, 0.22);
+        --glass-border-bright: rgba(255, 255, 255, 0.28);
+        --glass-Specular: rgba(255, 255, 255, 0.12);
+        --text-main: #f4f8ff;
+        --text-muted: #9eb5d8;
+        --electric-blue: #1b5cff;
+        --sky-cyan: #25b8ff;
+        --neon-yellow: #e6ff00;
+        --accent-green: #2ee59d;
+        --accent-amber: #ffbe3d;
+        --accent-red: #ff5c6c;
+        --radius-xl: 26px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --radius-pill: 999px;
+        --shadow-glass:
+          0 24px 60px rgba(1, 4, 14, 0.72),
+          inset 0 1px 0 rgba(255, 255, 255, 0.16),
+          inset 0 0 24px rgba(37, 184, 255, 0.05);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        background-color: var(--bg-void);
+        background-image:
+          radial-gradient(circle at 14% 16%, rgba(27, 92, 255, 0.36) 0%, transparent 44%),
+          radial-gradient(circle at 86% 18%, rgba(37, 184, 255, 0.24) 0%, transparent 40%),
+          radial-gradient(circle at 50% 85%, rgba(92, 45, 210, 0.22) 0%, transparent 50%),
+          linear-gradient(160deg, #02050e 0%, #07122b 52%, #030714 100%);
+        background-attachment: fixed;
+        color: var(--text-main);
+        font-family: 'Overpass', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        overflow-x: hidden;
+        position: relative;
+      }
+
+      /* Campo estelar e grade orbital sutil para imersão espacial */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.32;
+        background-image:
+          radial-gradient(1.2px 1.2px at 24px 36px, rgba(255, 255, 255, 0.85), transparent),
+          radial-gradient(1px 1px at 84px 112px, rgba(37, 184, 255, 0.75), transparent),
+          radial-gradient(1.4px 1.4px at 164px 62px, rgba(230, 255, 0, 0.65), transparent),
+          linear-gradient(to right, rgba(37, 184, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(37, 184, 255, 0.05) 1px, transparent 1px);
+        background-size: 220px 220px, 180px 180px, 260px 260px, 88px 88px, 88px 88px;
+      }
+
+      h1, h2, h3, h4, .brand-title {
+        font-family: 'Fira Sans', sans-serif;
+        letter-spacing: -0.015em;
+      }
+
+      code, pre, .mono-val {
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      /* Separação visual entre observação essencial e pesquisa avançada */
+      body[data-ui-mode="simple"] .tech-only {
+        display: none !important;
+      }
+
+      body[data-ui-mode="tech"] .simple-only {
+        display: none !important;
+      }
+
+      /* No modo essencial, a bancada fica centralizada e sem parâmetros avançados */
+      body[data-ui-mode="simple"] .explorer-layout {
+        display: block;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      body[data-ui-mode="tech"] .explorer-layout {
+        display: grid;
+        grid-template-columns: minmax(300px, 350px) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* Superfície Glassmorphism Padrão */
+      .glass-surface {
+        background: var(--glass-surface);
+        backdrop-filter: blur(26px) saturate(180%);
+        -webkit-backdrop-filter: blur(26px) saturate(180%);
+        border: 1px solid var(--glass-border);
+        border-top-color: var(--glass-border-bright);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-glass);
+      }
+
+      /* Cabeçalho Glassmorphism */
+      .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px max(24px, calc((100vw - 1380px) / 2));
+        background: rgba(5, 11, 26, 0.58);
+        backdrop-filter: blur(28px) saturate(190%);
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+        border-bottom: 1px solid var(--glass-border);
+        flex-wrap: wrap;
+      }
+
+      .app-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .spaceapps-emblem {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(27, 92, 255, 0.85), rgba(8, 28, 86, 0.9));
+        border: 1px solid rgba(230, 255, 0, 0.55);
+        box-shadow: 0 0 24px rgba(37, 184, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .brand-title-wrap h1 {
+        margin: 0;
+        font-size: 1.24rem;
+        font-weight: 800;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 3px 9px;
+        border-radius: var(--radius-pill);
+        background: var(--neon-yellow);
+        color: #040814;
+      }
+
+      .subtitle {
+        margin: 2px 0 0;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+      }
+
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .top-nav {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px;
+        border-radius: var(--radius-pill);
+        background: rgba(10, 20, 46, 0.55);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--glass-border);
+      }
+
+      .nav-tab {
+        padding: 8px 16px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-pill);
+        background: transparent;
+        color: var(--text-muted);
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.84rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .nav-tab:hover {
+        color: #ffffff;
+        background: rgba(37, 184, 255, 0.14);
+      }
+
+      .nav-tab.active {
+        background: linear-gradient(135deg, rgba(27, 92, 255, 0.9), rgba(18, 62, 180, 0.9));
+        color: #ffffff;
+        border-color: rgba(230, 255, 0, 0.45);
+        box-shadow: 0 4px 18px rgba(27, 92, 255, 0.45);
+      }
+
+      /* Alternância entre observação essencial e pesquisa avançada */
+      .mode-switch-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 16px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(37, 184, 255, 0.48);
+        background: rgba(14, 28, 62, 0.65);
+        backdrop-filter: blur(18px);
+        color: #ffffff;
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.83rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.22s ease;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+
+      .mode-switch-btn:hover {
+        border-color: var(--neon-yellow);
+        transform: translateY(-1px);
+      }
+
+      .mode-switch-btn[data-active-mode="tech"] {
+        background: linear-gradient(135deg, rgba(230, 255, 0, 0.2), rgba(27, 92, 255, 0.48));
+        border-color: var(--neon-yellow);
+        color: var(--neon-yellow);
+      }
+
+      .mode-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        box-shadow: 0 0 10px var(--accent-green);
+      }
+
+      .mode-switch-btn[data-active-mode="tech"] .mode-dot {
+        background: var(--neon-yellow);
+        box-shadow: 0 0 10px var(--neon-yellow);
+      }
+
+      .mode-pill-indicator {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.66rem;
+        padding: 2px 8px;
+        border-radius: var(--radius-pill);
+        background: rgba(46, 229, 157, 0.18);
+        color: var(--accent-green);
+        text-transform: uppercase;
+      }
+
+      .mode-switch-btn[data-active-mode="tech"] .mode-pill-indicator {
+        background: var(--neon-yellow);
+        color: #040814;
+      }
+
+      /* Container Principal */
+      .app-main {
+        position: relative;
+        z-index: 1;
+        width: min(1360px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 60px;
+      }
+
+      .page-view {
+        display: none;
+        animation: glassReveal 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .page-view.active {
+        display: block;
+      }
+
+      @keyframes glassReveal {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      /* Botões Gerais */
+      button.action-btn {
+        padding: 11px 18px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-border);
+        border-top-color: var(--glass-border-bright);
+        background: rgba(20, 38, 78, 0.56);
+        backdrop-filter: blur(12px);
+        color: var(--text-main);
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.86rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      button.action-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        border-color: var(--sky-cyan);
+        background: rgba(27, 92, 255, 0.42);
+        color: #ffffff;
+        box-shadow: 0 10px 26px rgba(27, 92, 255, 0.32);
+      }
+
+      .btn-neon {
+        background: var(--neon-yellow) !important;
+        color: #040814 !important;
+        border-color: var(--neon-yellow) !important;
+        font-weight: 800 !important;
+        box-shadow: 0 8px 28px rgba(230, 255, 0, 0.28);
+      }
+
+      .btn-neon:hover:not(:disabled) {
+        background: #f2ff52 !important;
+        box-shadow: 0 12px 32px rgba(230, 255, 0, 0.45);
+      }
+
+      /* =====================================================================
+         PÁGINA INICIAL: BOAS-VINDAS & GUIA INTERATIVO (PADRÃO AO ABRIR)
+         ===================================================================== */
+      .welcome-hero {
+        max-width: 1120px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: clamp(28px, 4.5vw, 54px);
+        border-radius: var(--radius-xl);
+        background:
+          radial-gradient(circle at 86% 18%, rgba(230, 255, 0, 0.16), transparent 36%),
+          radial-gradient(circle at 76% 84%, rgba(37, 184, 255, 0.25), transparent 46%),
+          linear-gradient(135deg, rgba(16, 34, 74, 0.62) 0%, rgba(7, 15, 36, 0.78) 100%);
+        backdrop-filter: blur(28px) saturate(190%);
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+        border: 1px solid rgba(140, 200, 255, 0.32);
+        border-top-color: rgba(255, 255, 255, 0.35);
+        box-shadow: var(--shadow-glass);
+        margin-bottom: 22px;
+        text-align: center;
+      }
+
+      .welcome-hero .eyebrow,
+      .welcome-hero p.lead {
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .welcome-hero > div:first-of-type {
+        justify-content: center;
+      }
+
+      .welcome-targets-wrap {
+        margin: 32px auto 0;
+        max-width: 1040px;
+        padding-top: 22px;
+        border-top: 1px solid rgba(185, 219, 255, 0.16);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 16px;
+        padding: 5px 14px;
+        border-radius: var(--radius-pill);
+        background: rgba(27, 92, 255, 0.28);
+        border: 1px solid rgba(37, 184, 255, 0.45);
+        color: var(--neon-yellow);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .welcome-hero h2 {
+        max-width: 820px;
+        margin: 0 0 14px;
+        color: #ffffff;
+        font-size: clamp(2rem, 4vw, 3.1rem);
+        line-height: 1.08;
+      }
+
+      .welcome-hero p.lead {
+        max-width: 740px;
+        margin: 0 0 26px;
+        color: #d0e2ff;
+        font-size: 1.04rem;
+        line-height: 1.62;
+      }
+
+      .welcome-section-label {
+        margin: 26px 0 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--sky-cyan);
+      }
+
+      .welcome-targets-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+        gap: 14px;
+      }
+
+      .welcome-target-card {
+        --card-z: 0px;
+        background: linear-gradient(145deg, rgba(219, 237, 255, 0.1), rgba(14, 28, 62, 0.4));
+        backdrop-filter: blur(22px) saturate(170%);
+        -webkit-backdrop-filter: blur(22px) saturate(170%);
+        border: 1px solid var(--glass-border);
+        border-top-color: rgba(255, 255, 255, 0.24);
+        border-radius: 18px;
+        padding: 16px;
+        cursor: pointer;
+        text-align: left;
+        color: var(--text-main);
+        transform: perspective(900px) rotateY(-3deg) translateZ(var(--card-z));
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .welcome-target-card:hover {
+        transform: perspective(900px) rotateY(0deg) translateY(-4px) translateZ(8px);
+        border-color: var(--neon-yellow);
+        background: rgba(27, 92, 255, 0.36);
+        box-shadow: 0 14px 32px rgba(27, 92, 255, 0.38);
+      }
+
+      .welcome-target-card strong {
+        font-family: 'Fira Sans', sans-serif;
+        font-size: 1rem;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+      }
+
+      .welcome-target-card span.badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        padding: 3px 8px;
+        border-radius: var(--radius-pill);
+        background: rgba(230, 255, 0, 0.16);
+        color: var(--neon-yellow);
+        text-transform: uppercase;
+      }
+
+      .welcome-target-card p {
+        margin: 0;
+        font-size: 0.81rem;
+        color: var(--text-muted);
+        line-height: 1.45;
+      }
+
+      body[data-ui-mode="simple"] .welcome-target-card p {
+        display: none;
+      }
+
+      .guide-disclosure {
+        max-width: 1120px;
+        margin: 0 auto 18px;
+        padding: 0 20px;
+        overflow: hidden;
+      }
+
+      .guide-disclosure summary {
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        cursor: pointer;
+        color: #eaf5ff;
+        font: 700 0.95rem 'Fira Sans', sans-serif;
+        list-style: none;
+      }
+
+      .guide-disclosure summary::-webkit-details-marker { display: none; }
+      .guide-disclosure summary::after {
+        content: "+";
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--glass-border);
+        border-radius: 50%;
+        color: var(--sky-cyan);
+        font: 500 1.2rem 'JetBrains Mono', monospace;
+      }
+      .guide-disclosure[open] summary::after { content: "−"; }
+
+      .guide-cascade-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        padding: 0 0 20px;
+      }
+
+      .guide-disclosure[open] .guide-step-card {
+        animation: guideCascade 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .guide-disclosure[open] .guide-step-card:nth-child(2) { animation-delay: 90ms; }
+      .guide-disclosure[open] .guide-step-card:nth-child(3) { animation-delay: 180ms; }
+
+      @keyframes guideCascade {
+        from { opacity: 0; transform: translateY(16px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .tech-mode-notes {
+        max-width: 1120px;
+        margin: 0 auto 20px;
+        padding: 20px;
+      }
+
+      .tech-mode-notes h3 { margin: 0 0 14px; }
+
+      .guide-steps-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .guide-step-card {
+        padding: 22px;
+      }
+
+      .step-num {
+        display: inline-block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: var(--radius-pill);
+        background: rgba(37, 184, 255, 0.16);
+        border: 1px solid rgba(37, 184, 255, 0.4);
+        color: var(--sky-cyan);
+        margin-bottom: 10px;
+      }
+
+      .guide-step-card {
+        background: linear-gradient(145deg, rgba(210, 233, 255, 0.095), rgba(8, 18, 42, 0.42));
+        backdrop-filter: blur(24px) saturate(170%);
+        -webkit-backdrop-filter: blur(24px) saturate(170%);
+        border-top-color: rgba(255, 255, 255, 0.25);
+      }
+
+      .guide-step-card h3 {
+        margin: 0 0 8px;
+        font-size: 1.1rem;
+        color: #ffffff;
+      }
+
+      .guide-step-card p {
+        margin: 0;
+        font-size: 0.88rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      /* =====================================================================
+         BANNER DE AVISO / EXCEÇÃO 500 SPHEREx (SIMPLES VS TÉCNICO)
+         ===================================================================== */
+      #system-notice {
+        display: none;
+        width: 100%;
+        margin: 0 auto 16px;
+        padding: 13px 18px;
+        border-radius: 16px;
+        background: rgba(14, 28, 58, 0.64);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 190, 61, 0.45);
+        box-shadow: var(--shadow-glass);
+        font-size: 0.85rem;
+        line-height: 1.45;
+      }
+
+      body[data-ui-mode="simple"] #system-notice {
+        max-width: 960px;
+      }
+
+      .notice-bar-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .notice-bar-top strong {
+        font-family: 'Fira Sans', sans-serif;
+        color: #ffffff;
+        font-size: 0.92rem;
+      }
+
+      .tech-log-console {
+        margin-top: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(3, 7, 18, 0.88);
+        border: 1px solid rgba(255, 92, 108, 0.42);
+        color: #ffb8c0;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem;
+        white-space: pre-wrap;
+        line-height: 1.5;
+      }
+
+      /* =====================================================================
+         MODO SIMPLES: APENAS CARDÁPIO DE ASTROS + MODO DE IMAGEM + VISOR
+         ===================================================================== */
+      .menu-glass-bar {
+        padding: 18px 22px;
+        margin: 0 auto 16px;
+      }
+
+      body[data-ui-mode="simple"] .menu-glass-bar {
+        max-width: 960px;
+      }
+
+      .menu-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .menu-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--sky-cyan);
+      }
+
+      .target-menu-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .astro-pill {
+        background: rgba(18, 36, 76, 0.52);
+        backdrop-filter: blur(14px);
+        border: 1px solid var(--glass-border);
+        border-top-color: rgba(255, 255, 255, 0.2);
+        color: #e2eeff;
+        padding: 9px 16px;
+        border-radius: var(--radius-pill);
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .astro-pill:hover {
+        background: rgba(27, 92, 255, 0.36);
+        border-color: var(--sky-cyan);
+        color: #ffffff;
+        transform: translateY(-1px);
+      }
+
+      .astro-pill.active-chip {
+        background: linear-gradient(135deg, rgba(27, 92, 255, 0.92), rgba(14, 48, 148, 0.92));
+        border-color: var(--neon-yellow);
+        color: #ffffff;
+        box-shadow: 0 6px 20px rgba(27, 92, 255, 0.55);
+      }
+
+      .astro-pill .pill-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.66rem;
+        color: var(--neon-yellow);
+        text-transform: uppercase;
+      }
+
+      /* Seletor de Modo de Imagem (4 Opções Limpas) */
+      .image-mode-selector {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .image-mode-card {
+        padding: 13px 15px;
+        border-radius: 16px;
+        border: 1px solid var(--glass-border);
+        border-top-color: rgba(255, 255, 255, 0.22);
+        background: rgba(14, 28, 60, 0.48);
+        backdrop-filter: blur(16px);
+        color: var(--text-main);
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .image-mode-card:hover {
+        border-color: var(--sky-cyan);
+        background: rgba(27, 92, 255, 0.3);
+        transform: translateY(-2px);
+      }
+
+      .image-mode-card.active-mode-btn {
+        border-color: var(--neon-yellow);
+        background: linear-gradient(135deg, rgba(27, 92, 255, 0.56), rgba(12, 26, 58, 0.86));
+        box-shadow: 0 0 0 1px rgba(230, 255, 0, 0.35), 0 10px 26px rgba(27, 92, 255, 0.32);
+      }
+
+      .image-mode-card strong {
+        font-family: 'Fira Sans', sans-serif;
+        font-size: 0.92rem;
+        color: #ffffff;
+      }
+
+      .image-mode-card span {
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        line-height: 1.35;
+      }
+
+      /* Palco do Visor Espacial */
+      .main-viewport-card {
+        padding: 20px;
+      }
+
+      .viewer-stage {
+        position: relative;
+        min-height: 420px;
+        border-radius: 20px;
+        border: 1px solid var(--glass-border);
+        background: radial-gradient(circle at center, rgba(14, 28, 60, 0.75) 0%, rgba(3, 7, 18, 0.95) 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        overflow: hidden;
+      }
+
+      #loading-indicator {
+        display: none;
+        margin: 24px auto;
+        text-align: center;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 12px;
+        border: 3px solid rgba(37, 184, 255, 0.2);
+        border-top: 3px solid var(--neon-yellow);
+        border-radius: 50%;
+        animation: spin 0.75s linear infinite;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      #image-wrapper {
+        display: none;
+        position: relative;
+        width: 100%;
+        max-width: 580px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      #display-canvas, #video-render-canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        margin: auto;
+        object-fit: contain;
+        border-radius: 16px;
+        border: 1px solid rgba(130, 190, 255, 0.35);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.82);
+        background-color: #030610;
+      }
+
+      #video-render-canvas {
+        display: none;
+      }
+
+      .epoch-badge {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        background: rgba(5, 11, 26, 0.78);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--neon-yellow);
+        padding: 5px 13px;
+        border-radius: var(--radius-pill);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.73rem;
+        font-weight: 600;
+        color: var(--neon-yellow);
+        pointer-events: none;
+      }
+
+      .db-badge {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        background: rgba(10, 22, 48, 0.78);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(37, 184, 255, 0.45);
+        padding: 5px 12px;
+        border-radius: var(--radius-pill);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: #c8e6ff;
+        pointer-events: none;
+      }
+
+      .crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 34px;
+        height: 34px;
+        border: 1.5px solid rgba(230, 255, 0, 0.72);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+
+      .crosshair::before {
+        content: '';
+        position: absolute;
+        top: 15px;
+        left: -10px;
+        right: -10px;
+        height: 1.5px;
+        background: rgba(230, 255, 0, 0.72);
+      }
+
+      .crosshair::after {
+        content: '';
+        position: absolute;
+        top: -10px;
+        bottom: -10px;
+        left: 15px;
+        width: 1.5px;
+        background: rgba(230, 255, 0, 0.72);
+      }
+
+      /* Barra de Reprodução do Vídeo */
+      .video-controls-bar {
+        display: none;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: rgba(10, 20, 44, 0.62);
+        backdrop-filter: blur(16px);
+        border: 1px solid var(--glass-border);
+      }
+
+      .video-control-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+      }
+
+      .video-control-btn {
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-pill);
+        padding: 6px 14px;
+        color: var(--text-main);
+        background: rgba(20, 38, 78, 0.65);
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.18s ease;
+      }
+
+      .video-control-btn:hover, .video-control-btn.active {
+        border-color: var(--neon-yellow);
+        background: rgba(27, 92, 255, 0.45);
+        color: #ffffff;
+      }
+
+      .target-explain-overlay {
+        margin-top: 14px;
+        padding: 12px 16px;
+        border-radius: 14px;
+        background: rgba(10, 20, 44, 0.62);
+        backdrop-filter: blur(14px);
+        border: 1px solid var(--glass-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .target-explain-text {
+        font-size: 0.85rem;
+        color: #dce9ff;
+        line-height: 1.45;
+      }
+
+      .target-explain-text strong {
+        color: var(--neon-yellow);
+      }
+
+      /* =====================================================================
+         ELEMENTOS EXCLUSIVOS DO MODO TÉCNICO (PARÂMETROS, FITS, LOGS)
+         ===================================================================== */
+      .sidebar {
+        padding: 18px;
+      }
+
+      .control-group + .control-group {
+        border-top: 1px solid rgba(148, 179, 226, 0.16);
+        margin-top: 14px;
+        padding-top: 14px;
+      }
+
+      .control-group h2 {
+        margin: 0 0 10px;
+        color: var(--sky-cyan);
+        font-size: 0.73rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .coord-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .control-field {
+        display: block;
+        margin: 7px 0;
+      }
+
+      .control-field span {
+        display: block;
+        margin: 0 0 4px;
+        color: var(--text-muted);
+        font-size: 0.77rem;
+      }
+
+      input:not([type="checkbox"]):not([type="range"]), select {
+        width: 100%;
+        padding: 8px 11px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 179, 226, 0.26);
+        background-color: rgba(5, 10, 24, 0.78);
+        color: #ffffff;
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.84rem;
+      }
+
+      .filter-option, .context-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+
+      .processing-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .processing-group {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        padding: 12px;
+        border: 1px solid rgba(148, 179, 226, 0.16);
+        border-radius: 14px;
+        background: rgba(8, 16, 36, 0.58);
+      }
+
+      .processing-group h3 {
+        margin: 0 0 2px;
+        color: var(--sky-cyan);
+        font-size: 0.71rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .processing-group .action-btn {
+        width: 100%;
+        justify-content: flex-start;
+        padding: 8px 11px;
+        font-size: 0.79rem;
+      }
+
+      #metadata-panel {
+        display: none;
+        background: rgba(7, 14, 32, 0.76);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--glass-border);
+        padding: 16px 18px;
+        border-radius: 16px;
+        width: 100%;
+        margin: 14px auto 0;
+        text-align: left;
+        font-size: 0.82rem;
+      }
+
+      .metadata-columns {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 12px;
+      }
+
+      .epoch-metadata {
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 179, 226, 0.16);
+        border-radius: 12px;
+        background: rgba(14, 28, 56, 0.48);
+      }
+
+      .epoch-metadata h5 {
+        margin: 0 0 8px;
+        color: var(--neon-yellow);
+        font-size: 0.86rem;
+      }
+
+      .epoch-metadata p {
+        margin: 4px 0;
+        color: #d0def5;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem;
+      }
+
+      #guided-comparison {
+        display: none;
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        background: rgba(10, 20, 44, 0.62);
+        backdrop-filter: blur(16px);
+      }
+
+      #guided-comparison h4 {
+        margin: 0 0 10px;
+        color: var(--neon-yellow);
+        font-size: 0.92rem;
+      }
+
+      .guided-comparison-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+        gap: 12px;
+      }
+
+      .guided-comparison-card {
+        padding: 10px;
+        border: 1px solid rgba(148, 179, 226, 0.16);
+        border-radius: 12px;
+        background: rgba(5, 10, 24, 0.66);
+      }
+
+      .guided-comparison-card h5 {
+        margin: 0 0 6px;
+        color: var(--text-main);
+        font-size: 0.8rem;
+      }
+
+      .guided-comparison-card img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+      }
+
+      .guided-comparison-card p {
+        margin: 6px 0 0;
+        color: var(--accent-amber);
+        font-size: 0.74rem;
+      }
+
+      /* Mapa Estelar */
+      .starmap-layout {
+        display: grid;
+        grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .map-panel {
+        padding: 18px;
+      }
+
+      .map-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 10px 0;
+      }
+
+      .map-filter {
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-pill);
+        padding: 6px 12px;
+        color: var(--text-muted);
+        background: rgba(8, 16, 36, 0.68);
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .map-filter.active {
+        border-color: var(--neon-yellow);
+        background: rgba(230, 255, 0, 0.16);
+        color: var(--neon-yellow);
+      }
+
+      .catalog-list {
+        display: grid;
+        gap: 6px;
+        max-height: 460px;
+        overflow: auto;
+        perspective: 900px;
+      }
+
+      .catalog-item {
+        --catalog-depth: 0px;
+        width: 100%;
+        display: grid;
+        gap: 5px;
+        padding: 11px 12px;
+        border: 1px solid rgba(150, 205, 255, 0.15);
+        border-top-color: rgba(255, 255, 255, 0.22);
+        border-radius: 13px;
+        color: var(--text-main);
+        background: linear-gradient(145deg, rgba(220, 238, 255, 0.085), rgba(6, 12, 28, 0.5));
+        backdrop-filter: blur(18px) saturate(165%);
+        -webkit-backdrop-filter: blur(18px) saturate(165%);
+        text-align: left;
+        font-family: 'Overpass', sans-serif;
+        font-size: 0.84rem;
+        cursor: pointer;
+        transform: perspective(900px) rotateY(-4deg) translateZ(var(--catalog-depth));
+        transform-origin: left center;
+        transition: transform 0.28s ease, border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+      }
+
+      .catalog-item-name {
+        position: relative;
+        z-index: 1;
+      }
+
+      .catalog-distance {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: #a9c4e8;
+        font: 0.68rem 'JetBrains Mono', monospace;
+      }
+
+      .catalog-distance-meter {
+        display: block;
+        height: 2px;
+        margin-top: 1px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: rgba(130, 190, 255, 0.1);
+      }
+
+      .catalog-distance-meter span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--sky-cyan), var(--neon-yellow));
+        box-shadow: 0 0 8px rgba(37, 184, 255, 0.7);
+      }
+
+      .catalog-item:hover, .catalog-item.active {
+        border-color: var(--sky-cyan);
+        background: linear-gradient(145deg, rgba(46, 128, 255, 0.24), rgba(9, 22, 50, 0.58));
+        box-shadow: 0 12px 22px rgba(0, 0, 0, 0.22), inset 0 1px rgba(255, 255, 255, 0.12);
+        transform: perspective(900px) rotateY(0deg) translateX(4px) translateZ(8px);
+      }
+
+      .map-view-switch {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+
+      .map-view-toggle {
+        color: var(--text-muted);
+        border-color: rgba(145, 202, 255, 0.18);
+        background: rgba(210, 233, 255, 0.055);
+        backdrop-filter: blur(18px);
+      }
+
+      #distance-map-canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1.8 / 1;
+        border: 1px solid var(--glass-border);
+        border-top-color: var(--glass-border-bright);
+        border-radius: 16px;
+        background: radial-gradient(ellipse at 50% 50%, rgba(28, 66, 120, 0.24), rgba(3, 7, 18, 0.92));
+        cursor: grab;
+        touch-action: none;
+      }
+
+      #distance-map-canvas:active { cursor: grabbing; }
+
+      .distance-map-caption {
+        margin: 12px 2px 0;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        line-height: 1.5;
+      }
+
+      .distance-map-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 9px;
+        color: var(--text-muted);
+        font-size: 0.74rem;
+      }
+
+      .distance-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .distance-map-legend i {
+        width: 8px;
+        height: 8px;
+        display: inline-block;
+        border-radius: 50%;
+        background: var(--sky-cyan);
+        box-shadow: 0 0 9px currentColor;
+      }
+
+      .distance-map-legend .challenge-dot { background: var(--neon-yellow); }
+      .distance-map-legend .earth-dot { background: #ffffff; }
+
+      #starmap-canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2 / 1;
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        background: #030712;
+        cursor: crosshair;
+        touch-action: none;
+      }
+
+      .starmap-tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin: 10px 0;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+      }
+
+      /* Espectro */
+      .spectrum-page-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+      }
+
+      body[data-ui-mode="tech"] .spectrum-page-grid {
+        grid-template-columns: minmax(290px, 0.88fr) minmax(0, 1.32fr);
+      }
+
+      .spectrum-panel {
+        padding: 20px;
+      }
+
+      .spectrum-panel textarea {
+        display: block;
+        width: 100%;
+        min-height: 220px;
+        padding: 12px;
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        background: rgba(5, 10, 24, 0.82);
+        color: var(--text-main);
+        font: 12.5px/1.5 'JetBrains Mono', monospace;
+        resize: vertical;
+      }
+
+      #spectrum-result {
+        display: none;
+        width: 100%;
+        max-width: 820px;
+        height: auto;
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        background: #060d20;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 960px) {
+        .app-header {
+          position: static;
+        }
+        body[data-ui-mode="tech"] .explorer-layout,
+        .starmap-layout,
+        .guide-steps-grid,
+        .guide-cascade-grid,
+        .processing-actions,
+        body[data-ui-mode="tech"] .spectrum-page-grid {
+          grid-template-columns: 1fr;
+        }
+        .image-mode-selector {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .image-mode-selector {
+          grid-template-columns: 1fr;
+        }
+        .welcome-hero { padding: 26px 18px; }
+        .welcome-hero h2 { font-size: clamp(1.8rem, 9vw, 2.4rem); }
+      }
+    </style>
+  </head>
+  <body data-ui-mode="simple">
+
+    <!-- CABEÇALHO GLASSMORPHISM SEM EMOJIS -->
+    <header class="app-header">
+      <div class="app-brand" onclick="switchPage('home')" title="Ir para a página inicial">
+        <div class="spaceapps-emblem" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#E6FF00"/>
+            <circle cx="12" cy="12" r="9" stroke="#25B8FF" stroke-width="1.3" stroke-dasharray="3 3"/>
+          </svg>
+        </div>
+        <div class="brand-title-wrap">
+          <h1>
+            Sky Researcher
+            <span class="brand-tag">Planet X & SPHEREx</span>
+          </h1>
+          <p class="subtitle">Exploração Espacial Interativa · NASA Space Apps Challenge 2026</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <nav class="top-nav" aria-label="Navegação principal">
+          <button class="nav-tab active" data-page="home" type="button">Boas-vindas</button>
+          <button class="nav-tab" data-page="workbench" type="button">Explorar Céu</button>
+          <button class="nav-tab" data-page="starmap" type="button">Mapa Estelar</button>
+          <button class="nav-tab" data-page="spectrum" type="button">Espectro</button>
+        </nav>
+
+        <!-- Alternância entre modos de observação e pesquisa -->
+        <button id="ui-mode-toggle" class="mode-switch-btn" type="button" data-active-mode="simple" title="Alterna entre observação essencial e ferramentas de pesquisa" onclick="toggleUiComplexityMode()">
+          <span class="mode-dot" aria-hidden="true"></span>
+          <span id="ui-mode-label">Modo de Observação</span>
+          <span id="ui-mode-badge" class="mode-pill-indicator">Essencial</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="app-main" class="app-main">
+      <!-- Banner de Notificação / Failover Automático de Banco de Dados -->
+      <div id="system-notice" role="status" aria-live="polite"></div>
+
+      <!-- ===================================================================
+           PÁGINA 1 (INICIAL PADRÃO): BOAS-VINDAS & GUIA DE EXPLORAÇÃO
+           =================================================================== -->
+      <section id="page-home" class="page-view active" aria-labelledby="home-title">
+        <div class="welcome-hero">
+          <p class="eyebrow">Missão NASA SPHEREx · Sky Researcher</p>
+          <h2 id="home-title">Explore o céu em luz infravermelha.</h2>
+          <p class="lead">
+            Bem-vindo ao <strong>Sky Researcher</strong>. Escolha um astro, veja imagens astronômicas reais e explore como o brilho muda entre levantamentos e épocas.
+          </p>
+
+          <div style="display:flex; flex-wrap:wrap; gap:12px;">
+            <button class="action-btn btn-neon" type="button" onclick="launchTargetFromGuide('barnard')">
+              Começar a explorar
+            </button>
+            <button class="action-btn" type="button" data-page-link="starmap">
+              Abrir mapa estelar
+            </button>
+          </div>
+
+          <div class="welcome-targets-wrap">
+          <div class="welcome-section-label">Alvos para começar</div>
+          <div class="welcome-targets-grid">
+            <button type="button" class="welcome-target-card" onclick="launchTargetFromGuide('barnard')">
+              <strong>Estrela de Barnard <span class="badge">Movimento</span></strong>
+              <p class="tech-only">Anã vermelha próxima; demonstra a comparação de posição entre épocas.</p>
+            </button>
+            <button type="button" class="welcome-target-card" onclick="launchTargetFromGuide('wise0855')">
+              <strong>WISE 0855−0714 <span class="badge">Infravermelho</span></strong>
+              <p class="tech-only">Anã marrom fria; explore as bandas infravermelhas próximas de 4,5 µm.</p>
+            </button>
+            <button type="button" class="welcome-target-card" onclick="launchTargetFromGuide('epsilonindi')">
+              <strong>Epsilon Indi B <span class="badge">Espectro</span></strong>
+              <p class="tech-only">Sistema de anãs marrons para inspeção dos canais espectrais do cubo DR1.</p>
+            </button>
+            <button type="button" class="welcome-target-card" onclick="launchTargetFromGuide('rwaurigae')">
+              <strong>RW Aurigae <span class="badge">Variável</span></strong>
+              <p class="tech-only">Sistema jovem variável; examine mudanças entre observações.</p>
+            </button>
+            <button type="button" class="welcome-target-card" onclick="launchTargetFromGuide('rdraconis')">
+              <strong>R Draconis <span class="badge">Gigante Mira</span></strong>
+              <p class="tech-only">Variável Mira para comparar a soma de imagens temporais.</p>
+            </button>
+          </div>
+          </div>
+        </div>
+
+        <details class="glass-surface guide-disclosure">
+          <summary>Consultar orientação de uso</summary>
+          <div class="guide-cascade-grid">
+            <article class="glass-surface guide-step-card">
+              <h3>Escolha um astro</h3>
+              <p>Use um alvo em destaque ou procure outro objeto no mapa celeste.</p>
+            </article>
+            <article class="glass-surface guide-step-card">
+              <h3>Escolha uma visualização</h3>
+              <p>Abra o laboratório e selecione comparação temporal, banda infravermelha ou espectro.</p>
+            </article>
+            <article class="glass-surface guide-step-card">
+              <h3>Confira a fonte</h3>
+              <p>Cada imagem informa o levantamento que forneceu os dados observados.</p>
+            </article>
+          </div>
+        </details>
+
+        <section class="glass-surface tech-mode-notes tech-only" aria-label="Detalhes dos modos de interface">
+          <h3>Modos da interface</h3>
+          <div class="guide-cascade-grid">
+            <article class="glass-surface guide-step-card">
+              <h3>Modo de Observação</h3>
+              <p>Mostra os alvos de destaque e as ações de imagem, mantendo coordenadas e metadados avançados recolhidos.</p>
+            </article>
+            <article class="glass-surface guide-step-card">
+              <h3>Modo de Pesquisa</h3>
+              <p>Expõe coordenadas, FOV, detectores, canais, filtros, cabeçalhos FITS/WCS e registros técnicos das consultas.</p>
+            </article>
+            <article class="glass-surface guide-step-card">
+              <h3>Fontes e contingência</h3>
+              <p>As imagens podem vir do SPHEREx no IRSA/AWS, DSS ou surveys infravermelhos; a interface identifica a fonte efetivamente exibida.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <!-- ===================================================================
+           PÁGINA 2: EXPLORAR CÉU (CARDÁPIO + MODO DE IMAGEM NO MODO SIMPLES)
+           =================================================================== -->
+      <section id="page-workbench" class="page-view" aria-labelledby="workbench-title">
+
+        <!-- CARDÁPIO DE ASTROS (LIMPO E FLUIDO) -->
+        <div class="glass-surface menu-glass-bar" aria-label="Cardápio de Astros">
+          <div class="menu-section-header">
+              <span class="menu-label">Alvos em destaque</span>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button class="map-filter" type="button" data-page-link="starmap">Selecionar na Carta Celeste</button>
+              <button class="map-filter tech-only" type="button" onclick="simulateSpherex500Exception()">Simular Exceção HTTP 500 SPHEREx</button>
+            </div>
+          </div>
+          <div class="target-menu-pills">
+            <button class="astro-pill active-chip" type="button" data-load-target="barnard">
+              Estrela de Barnard <span class="pill-tag">Movimento</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="wise0855">
+              WISE 0855−0714 <span class="pill-tag">Anã Fria</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="epsilonindi">
+              Epsilon Indi B <span class="pill-tag">Espectro</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="rwaurigae">
+              RW Aurigae <span class="pill-tag">Variável</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="rdraconis">
+              R Draconis <span class="pill-tag">Gigante</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="orion">
+              Nebulosa de Órion <span class="pill-tag">Berçário</span>
+            </button>
+            <button class="astro-pill" type="button" data-load-target="andromeda">
+              Andrômeda M31 <span class="pill-tag">Galáxia</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="explorer-layout">
+          <!-- BARRA LATERAL DE PARÂMETROS: ESTRITAMENTE OCULTA NO MODO SIMPLES -->
+          <aside class="glass-surface sidebar tech-only" aria-label="Parâmetros técnicos da missão">
+            <section class="control-group">
+              <h2>Coordenadas & Alvo (Técnico)</h2>
+              <label class="control-field">
+                <span>Catálogo completo (13 alvos)</span>
+                <select id="preset-target-select" onchange="selectPresetTarget(this.value, { autoExecute: shouldAutoExecutePreset() })">
+                  <option value="">Selecione um alvo…</option>
+                </select>
+              </label>
+              <div class="coord-grid">
+                <label class="control-field">
+                  <span>RA (J2000)</span>
+                  <input type="text" id="input-ra" value="17h57m48.5s">
+                </label>
+                <label class="control-field">
+                  <span>Dec (J2000)</span>
+                  <input type="text" id="input-dec" value="+04d41m36s">
+                </label>
+              </div>
+              <label class="control-field">
+                <span>Raio do Campo · FOV (arcmin)</span>
+                <input type="number" id="input-fov" min="0.5" max="60" step="0.5" value="10">
+              </label>
+              <button type="button" class="action-btn btn-neon" style="width:100%; margin-top:8px;" onclick="runRecommendedOrDefaultAction()">
+                Executar Coordenada
+              </button>
+            </section>
+
+            <section class="control-group">
+              <h2>Parâmetros SPHEREx & SkyView</h2>
+              <label class="control-field">
+                <span>Modo do Cubo SPHEREx DR1</span>
+                <select id="spherex-mode" onchange="updateSpherexBandControl()">
+                  <option value="channel">Canal individual (1–102)</option>
+                  <option value="detector" selected>Média por detector (1–6)</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span id="spherex-band-label">Detector (1–6)</span>
+                <input type="number" id="spherex-band" min="1" max="6" value="2" onchange="updateSpherexBandControl()">
+              </label>
+              <label class="control-field">
+                <span>Detector Temporal (DR1 vs QR3)</span>
+                <select id="spherex-detector">
+                  <option value="1">D1 · 0,75–1,09 µm</option>
+                  <option value="2" selected>D2 · 1,10–1,62 µm</option>
+                  <option value="3">D3 · 1,63–2,41 µm</option>
+                  <option value="4">D4 · 2,42–3,82 µm (H2O)</option>
+                  <option value="5">D5 · 3,83–4,41 µm (CO2)</option>
+                  <option value="6">D6 · 4,42–5,00 µm (CO)</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span>Fonte do Vídeo Temporal</span>
+                <select id="motion-source">
+                  <option value="auto" selected>Auto (SPHEREx com failover DSS/WISE)</option>
+                  <option value="spherex">Primário SPHEREx (DR1/QR3)</option>
+                  <option value="optical">Alternativo Óptico (DSS1/DSS2)</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span>Levantamento Infravermelho</span>
+                <select id="infrared-surveys">
+                  <option value="wise" selected>WISE W1 / W2 (3,4 / 4,6 µm)</option>
+                  <option value="wise-mid">WISE W3 / W4 (12 / 22 µm)</option>
+                  <option value="2mass">2MASS J / K</option>
+                  <option value="iras">IRAS 60 / 100 µm</option>
+                  <option value="akari">AKARI N60 / N160</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span>Cadência do Blink</span>
+                <select id="select-speed">
+                  <option value="300">Rápido (300 ms)</option>
+                  <option value="600" selected>Normal (600 ms)</option>
+                  <option value="1000">Lento (1000 ms)</option>
+                </select>
+              </label>
+              <label class="filter-option">
+                <input type="checkbox" id="apply-filter"> Filtro espacial de mediana 3×3
+              </label>
+              <label class="context-option">
+                <input type="checkbox" id="load-context" checked> Painéis comparativos multi-missão
+              </label>
+              <label class="context-option">
+                <input type="checkbox" id="tech-auto-run" checked> Auto-executar ao trocar alvo
+              </label>
+            </section>
+          </aside>
+
+          <!-- VISOR E SELETOR DE MODO DE IMAGEM -->
+          <section class="glass-surface main-viewport-card" aria-label="Modo de imagem e visor espacial">
+            <div class="menu-section-header" style="margin-bottom: 10px;">
+              <span class="menu-label">02 · Modo de Imagem</span>
+            </div>
+
+            <!-- SELETOR DE MODO DE IMAGEM (4 MODOS DIRETOS E INTUITIVOS) -->
+            <div class="image-mode-selector" role="group" aria-label="Seleção do modo de imagem">
+              <button type="button" id="simple-btn-video" class="image-mode-card active-mode-btn" onclick="executeQuickMotionVideo('auto')">
+                <strong>Vídeo Temporal</strong>
+                <span>Transição contínua entre épocas</span>
+              </button>
+              <button type="button" id="simple-btn-subtract" class="image-mode-card" onclick="executeSpherexCombination('subtract')">
+                <strong>Isolar Movimento</strong>
+                <span>Destaca apenas o que mudou de posição</span>
+              </button>
+              <button type="button" id="simple-btn-band" class="image-mode-card" onclick="executeSpherexBand({includeWiseComparison: true})">
+                <strong>Visão Infravermelha</strong>
+                <span>Emissão térmica profunda do astro</span>
+              </button>
+              <button type="button" id="simple-btn-spectrum" class="image-mode-card" onclick="switchPage('spectrum'); executeSpherexSpectrumQuickLook()">
+                <strong>Assinatura Espectral</strong>
+                <span>Bandas químicas de água, gelo e CO</span>
+              </button>
+            </div>
+
+            <!-- MATRIZ DE OPERAÇÕES AVANÇADAS (VISÍVEL APENAS NO MODO TÉCNICO) -->
+            <div class="processing-actions tech-only" aria-label="Operações técnicas">
+              <section class="processing-group">
+                <h3>Temporal SPHEREx (DR1/QR3)</h3>
+                <button class="action-btn" type="button" data-action="motion-video" onclick="executeQuickMotionVideo()">Crossfade Temporal</button>
+                <button class="action-btn" type="button" data-action="spherex-blink" onclick="executeSpherexBlink()">Blink Discreto SPHEREx</button>
+                <button class="action-btn" type="button" data-action="spherex-subtract" onclick="executeSpherexCombination('subtract')">Subtração WCS</button>
+                <button class="action-btn" type="button" data-action="spherex-add" onclick="executeSpherexCombination('add')">Soma Temporal (Stack)</button>
+              </section>
+              <section class="processing-group">
+                <h3>Cubo 3D & Espectro DR1</h3>
+                <button class="action-btn" type="button" data-action="spherex-band" onclick="executeSpherexBand({includeWiseComparison: shouldLoadWiseContext()})">Recorte Canal / Detector</button>
+                <button class="action-btn" type="button" data-action="spherex-spectrum" onclick="switchPage('spectrum'); executeSpherexSpectrumQuickLook()">Extrair Espectro 3×3</button>
+              </section>
+              <section class="processing-group">
+                <h3>Bancos Auxiliares (WISE / DSS)</h3>
+                <button class="action-btn" type="button" data-action="infrared" onclick="executeInfraredBlink()">Comparar Bandas WISE/IRAS</button>
+                <button class="action-btn" type="button" data-action="blink-optical" onclick="executeBlinkComparator()">Blink Óptico DSS1 / DSS2</button>
+                <button class="action-btn" type="button" data-action="subtract-optical" onclick="executeImageSubtraction()">Subtração DSS2 − DSS1</button>
+                <button class="action-btn" type="button" data-action="add-optical" onclick="executeImageAddition()">Soma Óptica DSS1 + DSS2</button>
+              </section>
+            </div>
+
+            <!-- Controles de Reprodução do Vídeo -->
+            <div id="video-controls-bar" class="video-controls-bar" aria-label="Controles de reprodução">
+              <div class="video-control-group">
+                <button id="btn-video-play" class="video-control-btn active" type="button" onclick="toggleVideoPlay()">Pausar</button>
+                <button id="btn-video-interp" class="video-control-btn active" type="button" onclick="toggleVideoInterp()">Transição Suave</button>
+              </div>
+              <div class="video-control-group">
+                <label for="video-speed-slider">Velocidade</label>
+                <input id="video-speed-slider" type="range" min="0.4" max="3.5" step="0.1" value="1.5">
+                <button class="video-control-btn" type="button" onclick="downloadAnimatedSnapshot()">Salvar Imagem</button>
+                <button class="video-control-btn tech-only" type="button" onclick="downloadWebmVideo()">Exportar WebM</button>
+              </div>
+            </div>
+
+            <!-- Palco Visual -->
+            <div class="viewer-stage">
+              <div id="loading-indicator">
+                <div class="spinner"></div>
+                <div id="loading-text" style="color: var(--neon-yellow); font-size: 0.9rem; font-weight: 600;">Sintonizando dados espaciais...</div>
+              </div>
+
+              <div id="image-wrapper">
+                <div class="epoch-badge" id="epoch-label">Época 1</div>
+                <div class="db-badge tech-only" id="active-db-badge">Fonte: SPHEREx DR1/QR3</div>
+                <img id="display-canvas" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Visualização astronômica">
+                <canvas id="video-render-canvas" width="520" height="520" aria-label="Animação entre épocas"></canvas>
+                <div class="crosshair"></div>
+              </div>
+
+              <div class="target-explain-overlay">
+                <div class="target-explain-text" id="viewer-caption-text">
+                  <strong>Estrela de Barnard:</strong> Observe no centro do visor o deslocamento da estrela entre as duas épocas registradas.
+                </div>
+                <button type="button" class="video-control-btn tech-only" onclick="handleFitsInspectClick()">
+                  Alternar Cabeçalhos FITS & WCS
+                </button>
+              </div>
+            </div>
+
+            <!-- Metadados Técnicos FITS (Apenas Modo Técnico) -->
+            <div id="metadata-panel" class="tech-only"></div>
+
+            <!-- Comparação Multi-Missão -->
+            <section id="guided-comparison" aria-live="polite"></section>
+          </section>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           PÁGINA 3: MAPA ESTELAR INTERATIVO
+           =================================================================== -->
+      <section id="page-starmap" class="page-view" aria-labelledby="starmap-title">
+        <div class="glass-surface menu-glass-bar" style="margin-bottom: 16px;">
+          <div class="menu-section-header" style="margin-bottom: 0;">
+            <div>
+              <h2 id="starmap-title" style="margin:0; font-size:1.25rem; color:#ffffff;">Carta Celeste Equatorial</h2>
+              <p style="margin:4px 0 0; color:var(--text-muted); font-size:0.84rem;">Consulte a direção no céu ou a distância espacial aproximada de cada objeto.</p>
+            </div>
+            <button class="action-btn btn-neon" type="button" data-page-link="workbench">Voltar ao Visor</button>
+          </div>
+        </div>
+
+        <div class="starmap-layout">
+          <aside class="glass-surface map-panel" aria-label="Catálogo celeste">
+            <h3 style="margin-top:0;">Catálogo de Astros</h3>
+            <div class="map-filters" role="group" aria-label="Filtrar catálogo">
+              <button class="map-filter active" type="button" data-catalog-filter="all">Todos (13)</button>
+              <button class="map-filter" type="button" data-catalog-filter="challenge">Desafio NASA (5)</button>
+              <button class="map-filter" type="button" data-catalog-filter="classic">Clássicos (8)</button>
+            </div>
+            <div id="catalog-list" class="catalog-list"></div>
+          </aside>
+
+          <section class="glass-surface map-panel" aria-label="Carta celeste clicável">
+            <div class="map-view-switch" role="tablist" aria-label="Visualização do catálogo">
+              <button class="map-filter map-view-toggle active" type="button" role="tab" aria-selected="true" data-starmap-view="sky">Carta celeste</button>
+              <button class="map-filter map-view-toggle" type="button" role="tab" aria-selected="false" data-starmap-view="distance">Espaço 3D · distância da Terra</button>
+            </div>
+
+            <div id="starmap-sky-view" role="tabpanel">
+              <canvas id="starmap-canvas" width="1000" height="500" aria-label="Mapa equatorial clicável"></canvas>
+              <div class="starmap-tools">
+                <label for="map-zoom">Zoom <strong id="map-zoom-value">1.0×</strong></label>
+                <input id="map-zoom" type="range" min="1" max="6" step="0.1" value="1">
+                <button id="map-reset" class="map-filter" type="button">Centralizar carta</button>
+                <label class="tech-only" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input id="auto-run-on-map-click" type="checkbox" checked> Executar análise ao selecionar
+                </label>
+                <span id="map-coordinate-readout" class="mono-val" style="font-size:0.78rem; color:var(--sky-cyan);">Selecione um astro no mapa</span>
+              </div>
+            </div>
+
+            <div id="starmap-distance-view" role="tabpanel" hidden>
+              <canvas id="distance-map-canvas" width="1000" height="560" aria-label="Mapa tridimensional de objetos por coordenada celeste e distância da Terra"></canvas>
+              <div class="starmap-tools">
+                <span>Arraste para girar o espaço 3D · clique em um ponto para selecionar</span>
+                <button id="distance-map-reset" class="map-filter" type="button">Reorientar</button>
+              </div>
+              <p class="distance-map-caption">A posição usa RA/Dec e distância aproximada; a escala radial é logarítmica para mostrar estrelas próximas e galáxias no mesmo quadro. Objetos sem distância cadastrada permanecem no catálogo, sem posição 3D inventada.</p>
+              <div class="distance-map-legend" aria-label="Legenda do mapa tridimensional">
+                <span><i class="earth-dot"></i>Terra</span>
+                <span><i class="challenge-dot"></i>Alvos do desafio</span>
+                <span><i></i>Clássicos do céu</span>
+              </div>
+            </div>
+
+            <article id="object-inspector" class="glass-surface" style="padding:16px; margin-top:12px;" aria-live="polite">
+              <h3 id="inspector-name" style="margin-top:0;">Estrela de Barnard</h3>
+              <p id="inspector-description" style="color:var(--text-muted); font-size:0.86rem;">Selecione um marcador para inspecionar ou observar.</p>
+              <dl id="inspector-details" class="tech-only"></dl>
+              <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;">
+                <button id="execute-catalog-action" class="action-btn btn-neon" type="button">Observar Este Astro</button>
+                <button id="load-catalog-object" class="action-btn tech-only" type="button">Apenas Carregar Coordenadas</button>
+              </div>
+            </article>
+          </section>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           PÁGINA 4: ASSINATURA ESPECTRAL (0,75–5,00 µm)
+           =================================================================== -->
+      <section id="page-spectrum" class="page-view" aria-labelledby="spectrum-title">
+        <div class="glass-surface spectrum-panel" style="margin-bottom: 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h2 id="spectrum-title" style="margin:0; font-size:1.3rem; color:#ffffff;">Assinatura Espectral Infravermelha (0,75–5,00 µm)</h2>
+            <p id="spectrum-target-summary" style="margin:4px 0 0; color:var(--neon-yellow); font-size:0.85rem; font-weight:600;">Astro: Epsilon Indi B</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="action-btn btn-neon" type="button" onclick="executeSpherexSpectrumQuickLook()">Atualizar Espectro</button>
+            <button class="action-btn" type="button" onclick="selectPresetTarget('wise0855', { autoExecute: false }); executeSpherexSpectrumQuickLook()">Extrair espectro de WISE 0855</button>
+            <button class="action-btn" type="button" data-page-link="workbench">Voltar ao Visor</button>
+          </div>
+        </div>
+
+        <div class="spectrum-page-grid">
+          <section class="glass-surface spectrum-panel tech-only">
+            <h3 style="margin-top:0;">Dados tabulares CSV · Modo de Pesquisa</h3>
+            <p style="color:var(--text-muted); font-size:0.82rem;">Formato: <code>comprimento_onda_um, fluxo_mjy_sr, incerteza</code></p>
+            <textarea id="spectrum-data" rows="11"></textarea>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+              <button class="action-btn" type="button" onclick="executeSpectrumQuickLook()">Plotar Dados Editados</button>
+              <button class="action-btn" type="button" onclick="downloadSpectrumCsv()">Exportar CSV</button>
+            </div>
+          </section>
+
+          <section class="glass-surface spectrum-panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <h3 style="margin:0;">Curva Espectral e Bandas Moleculares</h3>
+              <span id="spectrum-status" style="color:var(--sky-cyan); font-size:0.8rem;" class="mono-val">Pronto</span>
+            </div>
+            <p style="color:var(--text-muted); font-size:0.84rem; margin:6px 0 10px;">
+              Regiões espectrais associadas a moléculas espaciais: <strong>H2O / Gelo (~3,0 µm)</strong>, <strong>CO2 (~4,26 µm)</strong> e <strong>CO (~4,67 µm)</strong>.
+            </p>
+            <p id="spectrum-fallback-note" style="display:none;color:var(--neon-yellow);font-size:0.9rem;"></p>
+            <img id="spectrum-result" alt="Gráfico do Espectro Infravermelho" style="display:none;">
+            <img id="spectrum-fallback-image" alt="Imagem alternativa de survey infravermelho" style="display:none;">
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const BASE_API_URL = "http://127.0.0.1:8002/api";
+      const CELESTIAL_CATALOG = [
+        {
+          id: "barnard",
+          name: "Estrela de Barnard",
+          category: "challenge",
+          type_label: "Anã vermelha de alto movimento próprio (10,3″/ano)",
+          ra: "17h57m48.5s",
+          dec: "+04d41m36s",
+          ra_deg: 269.452,
+          dec_deg: 4.693,
+          fov: 10,
+          distance: "≈ 5,96 anos-luz",
+          distance_ly: 5.96,
+          recommended: { spherex_detector: 2, spherex_mode: "detector", spherex_band: 2, filter: false, infrared: "wise" },
+          suggested_action: "motion-video",
+          tech_suggested_action: "spherex-subtract",
+          description: "A estrela mais veloz do céu. Observe no centro da mira seu deslocamento aparente entre as duas épocas registradas."
+        },
+        {
+          id: "wise0855",
+          name: "WISE 0855−0714",
+          category: "challenge",
+          type_label: "Sub-anã marrom classe Y ultra-fria (≈ 250 K)",
+          ra: "08h55m10.831s",
+          dec: "-07d14m42.53s",
+          ra_deg: 133.795,
+          dec_deg: -7.245,
+          fov: 30,
+          distance: "≈ 7,4 anos-luz",
+          distance_ly: 7.4,
+          recommended: { spherex_detector: 6, spherexex_mode: "detector", spherex_mode: "detector", spherex_band: 6, filter: false, infrared: "wise" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "spherex-band",
+          description: "Objeto extremamente frio e invisível na luz óptica, mas que brilha de forma intensa nas bandas infravermelhas de 4,5 µm."
+        },
+        {
+          id: "epsilonindi",
+          name: "Epsilon Indi B",
+          category: "challenge",
+          type_label: "Par binário de anãs marrons (T1 + T6)",
+          ra: "22h04m10.595s",
+          dec: "-56d46m58.239s",
+          ra_deg: 331.044,
+          dec_deg: -56.783,
+          fov: 6,
+          distance: "≈ 12 anos-luz",
+          distance_ly: 12,
+          recommended: { spherex_detector: 2, spherex_mode: "channel", spherex_band: 15, filter: false, infrared: "wise" },
+          suggested_action: "spherex-spectrum",
+          tech_suggested_action: "spherex-spectrum",
+          description: "Sistema binário de anãs marrons próximo; referência para inspecionar bandas de absorção de vapor d'água e metano."
+        },
+        {
+          id: "rwaurigae",
+          name: "RW Aurigae",
+          category: "challenge",
+          type_label: "Sistema jovem variável T Tauri",
+          ra: "05h07m49.5s",
+          dec: "+30d24m05s",
+          ra_deg: 76.956,
+          dec_deg: 30.401,
+          fov: 5,
+          distance: "≈ 450 anos-luz",
+          distance_ly: 450,
+          recommended: { spherex_detector: 5, spherex_mode: "detector", spherex_band: 5, filter: true, infrared: "wise" },
+          suggested_action: "motion-video",
+          tech_suggested_action: "spherex-blink",
+          description: "Sistema estelar jovem cercado por nuvens de poeira em rotação que varia drasticamente de brilho entre épocas."
+        },
+        {
+          id: "rdraconis",
+          name: "R Draconis",
+          category: "challenge",
+          type_label: "Gigante vermelha variável tipo Mira",
+          ra: "16h32m40.23s",
+          dec: "+66d45m17.9s",
+          ra_deg: 248.168,
+          dec_deg: 66.755,
+          fov: 10,
+          distance: "Distância sem valor confiável cadastrado",
+          distance_ly: null,
+          recommended: { spherex_detector: 6, spherex_mode: "detector", spherex_band: 6, filter: false, infrared: "wise" },
+          suggested_action: "motion-video",
+          tech_suggested_action: "spherex-add",
+          description: "Estrela gigante vermelha pulsante cujo brilho infravermelho oscila ao longo de ciclos de 245 dias."
+        },
+        {
+          id: "andromeda",
+          name: "Galáxia de Andrômeda (M31)",
+          category: "classic",
+          type_label: "Galáxia espiral vizinha",
+          ra: "00h42m44.3s",
+          dec: "+41d16m09s",
+          ra_deg: 10.685,
+          dec_deg: 41.269,
+          fov: 60,
+          distance: "≈ 2,5 milhões de anos-luz",
+          distance_ly: 2500000,
+          recommended: { spherex_detector: 1, spherex_mode: "detector", spherex_band: 1, filter: false, infrared: "wise" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "infrared",
+          is_extended: "galaxy",
+          description: "Nossa grande galáxia espiral vizinha vista através do brilho infravermelho de seu núcleo e anéis de poeira."
+        },
+        {
+          id: "orion",
+          name: "Nebulosa de Órion (M42)",
+          category: "classic",
+          type_label: "Nebulosa de emissão e berçário estelar",
+          ra: "05h35m17.3s",
+          dec: "-05d23m28s",
+          ra_deg: 83.822,
+          dec_deg: -5.391,
+          fov: 30,
+          distance: "≈ 1.344 anos-luz",
+          distance_ly: 1344,
+          recommended: { spherex_detector: 4, spherex_mode: "detector", spherex_band: 4, filter: false, infrared: "wise-mid" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "spherex-band",
+          is_extended: "nebula",
+          description: "Berçário estelar repleto de estrelas recém-nascidas aquecendo nuvens densas de gás e poeira."
+        },
+        {
+          id: "pleiades",
+          name: "Aglomerado das Plêiades (M45)",
+          category: "classic",
+          type_label: "Aglomerado estelar aberto",
+          ra: "03h47m24.0s",
+          dec: "+24d07m00s",
+          ra_deg: 56.850,
+          dec_deg: 24.117,
+          fov: 45,
+          distance: "≈ 450 anos-luz",
+          distance_ly: 450,
+          recommended: { spherex_detector: 2, spherex_mode: "detector", spherex_band: 2, filter: false, infrared: "wise" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "infrared",
+          is_extended: "cluster",
+          description: "Aglomerado estelar jovem atravessando uma nuvem interestelar de poeira refletora."
+        },
+        {
+          id: "sombrero",
+          name: "Galáxia do Sombrero (M104)",
+          category: "classic",
+          type_label: "Galáxia espiral vista de perfil",
+          ra: "12h39m59.4s",
+          dec: "-11d37m23s",
+          ra_deg: 189.998,
+          dec_deg: -11.623,
+          fov: 15,
+          distance: "≈ 30 milhões de anos-luz",
+          distance_ly: 30000000,
+          recommended: { spherex_detector: 5, spherex_mode: "detector", spherex_band: 5, filter: false, infrared: "wise" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "spherex-band",
+          is_extended: "galaxy",
+          description: "Galáxia espiral caracterizada por um anel simétrico de poeira fria que emite fortemente no infravermelho."
+        },
+        {
+          id: "whirlpool",
+          name: "Galáxia do Redemoinho (M51)",
+          category: "classic",
+          type_label: "Par de galáxias em interação",
+          ra: "13h29m52.7s",
+          dec: "+47d11m43s",
+          ra_deg: 202.470,
+          dec_deg: 47.195,
+          fov: 15,
+          distance: "≈ 23 milhões de anos-luz",
+          distance_ly: 23000000,
+          recommended: { spherex_detector: 3, spherex_mode: "detector", spherex_band: 3, filter: false, infrared: "wise" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "blink-optical",
+          is_extended: "galaxy",
+          description: "Par de galáxias em interação gravitacional com intensa atividade de formação estelar nos braços espirais."
+        },
+        {
+          id: "sirius",
+          name: "Sirius (Alfa Canis Majoris)",
+          category: "classic",
+          type_label: "Sistema binário estelar",
+          ra: "06h45m08.9s",
+          dec: "-16d42m58s",
+          ra_deg: 101.287,
+          dec_deg: -16.716,
+          fov: 10,
+          distance: "≈ 8,6 anos-luz",
+          distance_ly: 8.6,
+          recommended: { spherex_detector: 2, spherex_mode: "channel", spherex_band: 10, filter: false, infrared: "2mass" },
+          suggested_action: "motion-video",
+          tech_suggested_action: "infrared",
+          description: "Estrela mais brilhante do céu noturno terrestre, situada a apenas 8,6 anos-luz."
+        },
+        {
+          id: "proxima",
+          name: "Proxima Centauri",
+          category: "classic",
+          type_label: "Anã vermelha mais próxima do Sol",
+          ra: "14h29m42.9s",
+          dec: "-62d40m46s",
+          ra_deg: 217.429,
+          dec_deg: -62.679,
+          fov: 10,
+          distance: "≈ 4,24 anos-luz",
+          distance_ly: 4.24,
+          recommended: { spherex_detector: 2, spherex_mode: "detector", spherex_band: 2, filter: false, infrared: "wise" },
+          suggested_action: "motion-video",
+          tech_suggested_action: "spherex-subtract",
+          description: "A estrela mais próxima do Sistema Solar, apresentando deslocamento astrométrico nítido entre épocas."
+        },
+        {
+          id: "betelgeuse",
+          name: "Betelgeuse (Alfa Orionis)",
+          category: "classic",
+          type_label: "Supergigante vermelha variável",
+          ra: "05h55m10.3s",
+          dec: "+07d24m25s",
+          ra_deg: 88.793,
+          dec_deg: 7.407,
+          fov: 15,
+          distance: "≈ 700 anos-luz (estimativa aproximada)",
+          distance_ly: 700,
+          recommended: { spherex_detector: 2, spherex_mode: "detector", spherex_band: 2, filter: false, infrared: "2mass" },
+          suggested_action: "spherex-band",
+          tech_suggested_action: "spherex-band",
+          description: "Supergigante vermelha envolta em conchas de poeira circunestelar aquecida."
+        }
+      ];
+
+      let uiComplexityMode = "simple";
+      let animationInterval = null;
+      let guidedAnimationInterval = null;
+      let guidedComparisonRequest = 0;
+      let selectedCatalogId = "barnard";
+      let selectedMapObjectId = "barnard";
+      let catalogFilter = "all";
+      let skyMapViewport = { zoom: 1, panX: 0, panY: 0 };
+      let skyMapDrag = null;
+      let distanceMapRotation = { yaw: -0.58, pitch: 0.34 };
+      let distanceMapDrag = null;
+      let ignoreSkyMapClick = false;
+      let lastFallbackLog = null;
+      let videoState = {
+        active: false,
+        playing: true,
+        crossfade: true,
+        phase: 0,
+        speed: 1.5,
+        frameRequest: null,
+        image1: null,
+        image2: null,
+        labels: ["Época 1 · 2025", "Época 2 · 2026"]
+      };
+      let imageCache = {
+        epoch1: null,
+        epoch2: null,
+        label1: "Época 1",
+        label2: "Época 2"
+      };
+
+      function safeUpdateUrlParam(key, value) {
+        try {
+          if (window.location.protocol !== "http:" && window.location.protocol !== "https:") return;
+          const url = new URL(window.location.href);
+          url.searchParams.set(key, value);
+          history.replaceState({}, "", url);
+        } catch (err) {
+          // Ignora ambientes restritos
+        }
+      }
+
+      /* Partir do Guia de Boas-Vindas diretamente para o Visor com 1 clique */
+      function launchTargetFromGuide(targetId = "barnard") {
+        switchPage("workbench");
+        selectPresetTarget(targetId, { autoExecute: true });
+      }
+
+      /* Alternância entre observação essencial e ferramentas de pesquisa */
+      function toggleUiComplexityMode(forceMode) {
+        uiComplexityMode = forceMode || (uiComplexityMode === "simple" ? "tech" : "simple");
+        document.body.dataset.uiMode = uiComplexityMode;
+
+        const btn = document.getElementById("ui-mode-toggle");
+        const label = document.getElementById("ui-mode-label");
+        const badge = document.getElementById("ui-mode-badge");
+        const panel = document.getElementById("metadata-panel");
+
+        if (uiComplexityMode === "tech") {
+          btn.dataset.activeMode = "tech";
+          label.textContent = "Modo de Pesquisa";
+          badge.textContent = "Ferramentas";
+          if (panel && panel.children.length > 0) {
+            panel.style.display = "block";
+          }
+        } else {
+          btn.dataset.activeMode = "simple";
+          label.textContent = "Modo de Observação";
+          badge.textContent = "Essencial";
+          if (panel) {
+            panel.style.display = "none";
+          }
+        }
+
+        if (lastFallbackLog) {
+          renderFallbackNotification(lastFallbackLog);
+        }
+
+        safeUpdateUrlParam("ui", uiComplexityMode);
+      }
+
+      function handleFitsInspectClick() {
+        const panel = document.getElementById("metadata-panel");
+        if (!panel) return;
+        const isHidden = panel.style.display === "none" || !panel.style.display;
+        panel.style.display = isHidden ? "block" : "none";
+      }
+
+      async function requestApi(endpointPath, paramsObj = {}, { responseType = "json", timeoutMs = 125000, signal: upstreamSignal = null } = {}) {
+        const query = new URLSearchParams(paramsObj).toString();
+        const url = `${BASE_API_URL}${endpointPath}${query ? `?${query}` : ""}`;
+        const controller = new AbortController();
+        const abortFromUpstream = () => controller.abort();
+        if (upstreamSignal?.aborted) controller.abort();
+        else upstreamSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status} em ${endpointPath}`;
+            const error = new Error(detail);
+            error.status = response.status;
+            error.url = url;
+            throw error;
+          }
+          return responseType === "blob" ? await response.blob() : await response.json();
+        } catch (error) {
+          if (!error.url) error.url = url;
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
+          upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+        }
+      }
+
+      function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Não foi possível ler a imagem retornada pela API."));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function apiErrorMessage(error) {
+        if (error?.name === "AbortError") return "A consulta excedeu o tempo limite.";
+        return error?.message || "Serviço de dados indisponível.";
+      }
+
+      /* Registra a falha primária sem afirmar que uma fonte alternativa já foi usada. */
+      function handleSpherexExceptionFallback({ alternativeDatabase, endpoint, statusCode = 500, errorDetail = "" }) {
+        lastFallbackLog = {
+          timestamp: new Date().toISOString(),
+          alternativeDatabase,
+          endpoint,
+          statusCode,
+          errorDetail: errorDetail || `HTTP ${statusCode} / serviço SPHEREx indisponível`,
+          fallbackSucceeded: false
+        };
+        renderFallbackNotification(lastFallbackLog);
+      }
+
+      function reportDataFallback(source, detail = "") {
+        const entry = lastFallbackLog || {
+          timestamp: new Date().toISOString(),
+          endpoint: "SPHEREx (fallback automático do backend)",
+          statusCode: null,
+          errorDetail: detail || "Sem cobertura disponível no conjunto SPHEREx solicitado."
+        };
+        lastFallbackLog = { ...entry, alternativeDatabase: source, fallbackSucceeded: true, fallbackDetail: detail };
+        const badge = document.getElementById("active-db-badge");
+        if (badge) {
+          badge.textContent = `Fonte alternativa: ${source}`;
+          badge.style.borderColor = "rgba(255, 190, 61, 0.65)";
+          badge.style.color = "#ffdf88";
+        }
+        renderFallbackNotification(lastFallbackLog);
+      }
+
+      function reportSurveyFallback(requestedGroup, actualSurveys) {
+        const notice = document.getElementById("system-notice");
+        if (!notice) return;
+        notice.replaceChildren();
+        const heading = document.createElement("strong");
+        heading.textContent = `Sem cobertura completa em ${requestedGroup}`;
+        const message = document.createElement("p");
+        message.style.cssText = "margin:6px 0 0;color:var(--text-muted);";
+        message.textContent = `A interface carregou dados reais dos surveys ${actualSurveys.join(", ")}. Cada quadro está identificado pela sua fonte.`;
+        notice.append(heading, message);
+        notice.style.display = "block";
+      }
+
+      function showDataUnavailable(action, errors = []) {
+        const notice = document.getElementById("system-notice");
+        const loading = document.getElementById("loading-indicator");
+        const wrapper = document.getElementById("image-wrapper");
+        const panel = document.getElementById("metadata-panel");
+        if (loading) loading.style.display = "none";
+        if (wrapper) wrapper.style.display = "none";
+        if (panel) panel.replaceChildren();
+        if (!notice) return;
+        notice.replaceChildren();
+        const hasCoverageMiss = errors.some((error) => error?.status === 404 || /sem cobertura|não retornou imagens|não contém um tile/i.test(apiErrorMessage(error)));
+        const hasServiceFailure = errors.some((error) => !error?.status || error.status >= 500);
+        const heading = document.createElement("strong");
+        heading.textContent = hasCoverageMiss && !hasServiceFailure
+          ? `Sem cobertura de dados para ${action}`
+          : hasServiceFailure
+            ? `Serviço de dados indisponível para ${action}`
+            : `Dados indisponíveis para ${action}`;
+        const message = document.createElement("p");
+        message.style.cssText = "margin:6px 0 0;color:var(--text-muted);";
+        message.textContent = hasCoverageMiss && !hasServiceFailure
+          ? "Os surveys consultados não têm imagens nesta região. Nenhuma imagem ou espectro sintético foi criado."
+          : "As fontes consultadas não retornaram dados para esta região. Nenhuma imagem ou espectro sintético foi criado.";
+        notice.append(heading, message);
+        if (uiComplexityMode === "tech" && errors.length) {
+          const detail = document.createElement("div");
+          detail.className = "tech-log-console";
+          detail.textContent = errors.map((error) => apiErrorMessage(error)).join("\n");
+          notice.append(detail);
+        }
+        notice.style.display = "block";
+        lastFallbackLog = null;
+      }
+
+      function showParameterError(error) {
+        const notice = document.getElementById("system-notice");
+        if (!notice) return;
+        notice.replaceChildren();
+        const heading = document.createElement("strong");
+        heading.textContent = "Parâmetros inválidos para a consulta";
+        const message = document.createElement("p");
+        message.style.cssText = "margin:6px 0 0;color:var(--text-muted);";
+        message.textContent = `${apiErrorMessage(error)} Verifique RA, Dec, FOV, detector e canal.`;
+        notice.append(heading, message);
+        notice.style.display = "block";
+        const loading = document.getElementById("loading-indicator");
+        if (loading) loading.style.display = "none";
+      }
+
+      function setSourceBadge(source) {
+        const badge = document.getElementById("active-db-badge");
+        if (!badge) return;
+        badge.textContent = `Fonte: ${source}`;
+        badge.style.borderColor = "rgba(37, 184, 255, 0.45)";
+        badge.style.color = "#c8e6ff";
+      }
+
+      function renderFallbackNotification(logEntry) {
+        const notice = document.getElementById("system-notice");
+        if (!notice || !logEntry) return;
+        notice.replaceChildren();
+
+        const topBar = document.createElement("div");
+        topBar.className = "notice-bar-top";
+
+        const heading = document.createElement("strong");
+        heading.textContent = logEntry.fallbackSucceeded
+          ? `Fonte alternativa ativa · ${logEntry.alternativeDatabase}`
+          : `Sem resposta SPHEREx · consultando ${logEntry.alternativeDatabase}`;
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "map-filter";
+        closeBtn.textContent = "Ocultar";
+        closeBtn.onclick = () => {
+          notice.style.display = "none";
+          lastFallbackLog = null;
+        };
+
+        topBar.append(heading, closeBtn);
+        notice.append(topBar);
+
+        const bodyText = document.createElement("p");
+        bodyText.style.margin = "6px 0 0";
+        bodyText.style.color = "var(--text-muted)";
+        bodyText.textContent = logEntry.fallbackSucceeded
+          ? `${logEntry.fallbackDetail || "A operação foi atendida por outra fonte astronômica real."} A fonte aparece identificada junto à imagem.`
+          : `A consulta SPHEREx falhou ou excedeu o tempo esperado (HTTP ${logEntry.statusCode}); a fonte alternativa está sendo consultada.`;
+        notice.append(bodyText);
+
+        if (uiComplexityMode === "tech") {
+          const consoleBox = document.createElement("div");
+          consoleBox.className = "tech-log-console";
+          consoleBox.textContent =
+            `[SPHEREX EXCEPTION LOG - ACESSÍVEL SOMENTE NO MODO TÉCNICO]\n` +
+            `TIMESTAMP   : ${logEntry.timestamp}\n` +
+            `ENDPOINT    : ${logEntry.endpoint}\n` +
+            `HTTP STATUS : ${logEntry.statusCode ?? "N/A (fallback por cobertura/serviço)"}\n` +
+            `ALTERNATIVA : ${logEntry.fallbackSucceeded ? `Dados reais carregados de ${logEntry.alternativeDatabase}` : `Tentativa para ${logEntry.alternativeDatabase}`}\n` +
+            `DIAGNÓSTICO : ${logEntry.errorDetail}`;
+          notice.append(consoleBox);
+        }
+
+        notice.style.display = "block";
+      }
+
+      /* Consulta SPHEREx com timeout alinhado ao limite remoto do backend. O chamador
+         seleciona uma fonte alternativa real quando esta consulta falha. */
+      async function fetchWithSpherexFailover(endpointPath, paramsObj, fallbackDatabaseName) {
+        try {
+          const payload = await requestApi(endpointPath, paramsObj, { timeoutMs: 30000 });
+          setSourceBadge(payload?.source || "SPHEREx DR1/QR3");
+          lastFallbackLog = null;
+          return payload;
+        } catch (err) {
+          if (err.status === 422) {
+            showParameterError(err);
+            return { __fatalError: true };
+          }
+          handleSpherexExceptionFallback({
+            alternativeDatabase: fallbackDatabaseName,
+            endpoint: err.url || `${BASE_API_URL}${endpointPath}`,
+            statusCode: err.status || 502,
+            errorDetail: apiErrorMessage(err)
+          });
+          return null;
+        }
+      }
+
+      async function fetchFastSpherexFallback(primaryPath, primaryParams, fallbackPath, fallbackParams, {
+        alternativeDatabase,
+        responseType = "json",
+        fallbackTimeoutMs = 25000
+      } = {}) {
+        const primaryController = new AbortController();
+        const fallbackController = new AbortController();
+        const primaryPromise = requestApi(primaryPath, primaryParams, {
+          timeoutMs: 30000,
+          signal: primaryController.signal
+        }).then((payload) => ({ payload }), (error) => ({ error }));
+        const fallbackPromise = requestApi(fallbackPath, fallbackParams, {
+          responseType,
+          timeoutMs: fallbackTimeoutMs,
+          signal: fallbackController.signal
+        }).then((payload) => ({ payload }), (error) => ({ error }));
+
+        const first = await Promise.race([
+          primaryPromise.then((result) => ({ kind: "primary", result })),
+          fallbackPromise.then((result) => ({ kind: "fallback", result }))
+        ]);
+        if (first.kind === "primary" && first.result.payload) {
+          fallbackController.abort();
+          lastFallbackLog = null;
+          return { source: "primary", payload: first.result.payload };
+        }
+        if (first.kind === "fallback" && first.result.payload) {
+          primaryController.abort();
+          reportDataFallback(alternativeDatabase, "A imagem alternativa foi consultada em paralelo para reduzir a espera.");
+          return { source: "fallback", payload: first.result.payload };
+        }
+
+        const primaryResult = first.kind === "primary" ? first.result : await primaryPromise;
+        const fallbackResult = first.kind === "fallback" ? first.result : await fallbackPromise;
+        if (primaryResult.error?.status === 422) {
+          fallbackController.abort();
+          showParameterError(primaryResult.error);
+          return { source: "error", error: primaryResult.error };
+        }
+        if (primaryResult.payload) {
+          fallbackController.abort();
+          lastFallbackLog = null;
+          return { source: "primary", payload: primaryResult.payload };
+        }
+        if (primaryResult.error) {
+          handleSpherexExceptionFallback({
+            alternativeDatabase,
+            endpoint: primaryResult.error.url || `${BASE_API_URL}${primaryPath}`,
+            statusCode: primaryResult.error.status || 502,
+            errorDetail: apiErrorMessage(primaryResult.error)
+          });
+        }
+        if (fallbackResult.payload) {
+          reportDataFallback(alternativeDatabase, "Imagem real da fonte alternativa carregada.");
+          return { source: "fallback", payload: fallbackResult.payload };
+        }
+        return { source: "error", errors: [primaryResult.error, fallbackResult.error].filter(Boolean) };
+      }
+
+      function simulateSpherex500Exception() {
+        const target = getCurrentTargetObject();
+        handleSpherexExceptionFallback({
+          alternativeDatabase: "WISE All-Sky + DSS2 (SkyView)",
+          endpoint: `${BASE_API_URL}/spherex/blink?ra=${encodeURIComponent(target.ra)}&dec=${encodeURIComponent(target.dec)}`,
+          statusCode: 500,
+          errorDetail: "Simulação local do estado de erro; nenhuma consulta ou troca de fonte foi executada."
+        });
+      }
+
+      function shouldAutoExecutePreset() {
+        if (uiComplexityMode === "simple") return true;
+        return Boolean(document.getElementById("tech-auto-run")?.checked);
+      }
+
+      function shouldLoadWiseContext() {
+        return Boolean(document.getElementById("load-context")?.checked);
+      }
+
+      function filterEnabled() {
+        return Boolean(document.getElementById("apply-filter")?.checked);
+      }
+
+      function highlightSimpleActionButton(modeKey) {
+        const map = {
+          "motion-video": "simple-btn-video",
+          "spherex-blink": "simple-btn-video",
+          "blink-optical": "simple-btn-video",
+          "spherex-subtract": "simple-btn-subtract",
+          "subtract-optical": "simple-btn-subtract",
+          "spherex-band": "simple-btn-band",
+          "spherex-add": "simple-btn-band",
+          "add-optical": "simple-btn-band",
+          "infrared": "simple-btn-band",
+          "spherex-spectrum": "simple-btn-spectrum"
+        };
+        const activeId = map[modeKey] || "simple-btn-video";
+        document.querySelectorAll(".image-mode-card").forEach((card) => {
+          card.classList.toggle("active-mode-btn", card.id === activeId);
+        });
+      }
+
+      function setTargetCoordinates(ra, dec, fov) {
+        document.getElementById("input-ra").value = ra;
+        document.getElementById("input-dec").value = dec;
+        document.getElementById("input-fov").value = fov;
+      }
+
+      function switchPage(pageId, { updateUrl = true } = {}) {
+        const page = document.getElementById(`page-${pageId}`);
+        if (!page) pageId = "home";
+        document.querySelectorAll(".page-view").forEach((view) => {
+          view.classList.toggle("active", view.id === `page-${pageId}`);
+        });
+        document.querySelectorAll(".nav-tab").forEach((tab) => {
+          const active = tab.dataset.page === pageId;
+          tab.classList.toggle("active", active);
+          if (active) tab.setAttribute("aria-current", "page");
+          else tab.removeAttribute("aria-current");
+        });
+        if (updateUrl) {
+          safeUpdateUrlParam("page", pageId);
+        }
+        if (pageId === "starmap") requestAnimationFrame(() => { drawSkyMap(); drawDistanceMap(); });
+        if (pageId === "spectrum") updateSpectrumTargetSummary();
+      }
+
+      function renderPresetOptions() {
+        const select = document.getElementById("preset-target-select");
+        if (!select) return;
+        select.replaceChildren();
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Selecione um alvo…";
+        select.append(placeholder);
+        for (const [category, label] of [["challenge", "Alvos do Desafio NASA (5)"], ["classic", "Clássicos do Céu (8)"]]) {
+          const group = document.createElement("optgroup");
+          group.label = label;
+          for (const item of CELESTIAL_CATALOG.filter((entry) => entry.category === category)) {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = `${item.name} — ${item.type_label}`;
+            group.append(option);
+          }
+          select.append(group);
+        }
+      }
+
+      function selectPresetTarget(targetId, { autoExecute = false } = {}) {
+        const target = CELESTIAL_CATALOG.find((item) => item.id === targetId);
+        if (!target) return;
+        selectedCatalogId = target.id;
+        selectedMapObjectId = target.id;
+        const recommended = target.recommended;
+        setTargetCoordinates(target.ra, target.dec, target.fov);
+        document.getElementById("spherex-detector").value = String(recommended.spherex_detector);
+        document.getElementById("spherex-mode").value = recommended.spherex_mode;
+        document.getElementById("spherex-band").value = String(recommended.spherex_band);
+        document.getElementById("apply-filter").checked = Boolean(recommended.filter);
+        document.getElementById("infrared-surveys").value = recommended.infrared;
+        document.getElementById("preset-target-select").value = target.id;
+        updateSpherexBandControl();
+
+        document.querySelectorAll("[data-load-target]").forEach((chip) => {
+          chip.classList.toggle("active-chip", chip.dataset.loadTarget === target.id);
+        });
+
+        updateSpectrumTargetSummary();
+        renderCatalogList();
+        drawSkyMap();
+
+        if (autoExecute) {
+          runTargetBestAction(target);
+        }
+      }
+
+      function runTargetBestAction(target) {
+        if (!target) return;
+        const actionKey = uiComplexityMode === "simple" ? target.suggested_action : target.tech_suggested_action;
+        if (actionKey === "spherex-spectrum") {
+          switchPage("spectrum");
+          executeSpherexSpectrumQuickLook();
+          return;
+        }
+        switchPage("workbench");
+        if (actionKey === "motion-video") {
+          executeQuickMotionVideo("auto");
+        } else if (actionKey === "spherex-subtract") {
+          executeSpherexCombination("subtract");
+        } else if (actionKey === "spherex-add") {
+          executeSpherexCombination("add");
+        } else if (actionKey === "spherex-blink") {
+          executeSpherexBlink();
+        } else if (actionKey === "spherex-band") {
+          executeSpherexBand({ includeWiseComparison: true });
+        } else if (actionKey === "infrared") {
+          executeInfraredBlink();
+        } else if (actionKey === "blink-optical") {
+          executeBlinkComparator();
+        } else {
+          executeQuickMotionVideo("auto");
+        }
+      }
+
+      function runRecommendedOrDefaultAction() {
+        const target = CELESTIAL_CATALOG.find((item) => item.id === selectedCatalogId);
+        if (target) {
+          runTargetBestAction(target);
+        } else {
+          executeQuickMotionVideo("auto");
+        }
+      }
+
+      function requireCoordinates() {
+        const ra = document.getElementById("input-ra").value.trim();
+        const dec = document.getElementById("input-dec").value.trim();
+        if (!ra || !dec) return null;
+        return { ra, dec };
+      }
+
+      function updateSpherexBandControl() {
+        const mode = document.getElementById("spherex-mode").value;
+        const input = document.getElementById("spherex-band");
+        const detectorMode = mode === "detector";
+        document.getElementById("spherex-band-label").textContent = detectorMode ? "Detector (1–6)" : "Canal (1–102)";
+        input.min = "1";
+        input.max = detectorMode ? "6" : "102";
+        const value = Number(input.value);
+        if (detectorMode && value > 6) input.value = "2";
+        if (!detectorMode && [51, 52].includes(value)) {
+          input.value = "50";
+        }
+      }
+
+      function getCurrentTargetObject() {
+        return CELESTIAL_CATALOG.find((item) => item.id === selectedCatalogId) || {
+          id: "custom",
+          name: `Coordenada (${document.getElementById("input-ra").value.trim()}, ${document.getElementById("input-dec").value.trim()})`,
+          type_label: "Campo estelar personalizado",
+          ra: document.getElementById("input-ra").value.trim(),
+          dec: document.getElementById("input-dec").value.trim(),
+          fov: Number(document.getElementById("input-fov").value) || 10,
+          distance: "Campo profundo",
+          description: "Região celeste analisada entre duas épocas registradas."
+        };
+      }
+
+      function prepareDisplay(statusMessage = "Sintonizando dados espaciais...") {
+        guidedComparisonRequest += 1;
+        videoState.active = false;
+        if (videoState.frameRequest) cancelAnimationFrame(videoState.frameRequest);
+        videoState.frameRequest = null;
+        if (guidedAnimationInterval) {
+          clearInterval(guidedAnimationInterval);
+          guidedAnimationInterval = null;
+        }
+        if (animationInterval) {
+          clearInterval(animationInterval);
+          animationInterval = null;
+        }
+        document.getElementById("video-controls-bar").style.display = "none";
+        document.getElementById("video-render-canvas").style.display = "none";
+        document.getElementById("display-canvas").style.display = "block";
+        document.getElementById("image-wrapper").style.display = "none";
+        const notice = document.getElementById("system-notice");
+        if (notice) {
+          notice.replaceChildren();
+          notice.style.display = "none";
+        }
+        document.getElementById("loading-text").innerText = statusMessage;
+        document.getElementById("loading-indicator").style.display = "block";
+
+        const guidedComparison = document.getElementById("guided-comparison");
+        if (guidedComparison) {
+          guidedComparison.replaceChildren();
+          guidedComparison.style.display = "none";
+        }
+      }
+
+      function updateMetadataPanel(metaEpoch1, metaEpoch2) {
+        const panel = document.getElementById("metadata-panel");
+        if (!panel) return;
+        panel.replaceChildren();
+        const heading = document.createElement("h4");
+        heading.textContent = "Metadados Técnicos (FITS Headers, WCS & Flags MSKNnnnn)";
+        heading.style.cssText = "color:var(--sky-cyan);margin-top:0;margin-bottom:10px;";
+        panel.append(heading);
+        const columns = document.createElement("div");
+        columns.className = "metadata-columns";
+        const metadataRows = metaEpoch2
+          ? [["Época 1", metaEpoch1], ["Época 2", metaEpoch2]]
+          : [["Dados da Imagem", metaEpoch1]];
+
+        for (const [label, metadata] of metadataRows.filter((entry) => entry[1])) {
+          const card = document.createElement("section");
+          card.className = "epoch-metadata";
+          const subheading = document.createElement("h5");
+          subheading.textContent = `${label} — ${metadata.survey_origin}`;
+          card.append(subheading);
+          for (const [name, value] of [
+            ["Data Obs. (UTC)", metadata.date_observed ?? "N/A"],
+            ["Exposição", `${metadata.exposure_time_sec ?? 0} s`],
+            ["Telescópio", metadata.telescope ?? "N/A"],
+            ["Origem dos Dados", metadata.data_source ?? "N/A"],
+            ["Instrumento", metadata.instrument ?? "N/A"],
+            ["ID Observação", metadata.observation_id ?? "N/A"],
+            ["Ref. WCS (RA, Dec)", metadata.wcs_reference_ra_dec?.join(", ") ?? "N/A"],
+            ["Escala do Pixel", metadata.pixel_scale ?? "N/A"],
+            ["Comprimento de Onda", metadata.wavelength_um != null ? `${metadata.wavelength_um.toFixed(4)} µm` : "N/A"],
+            ["Largura Espectral", metadata.bandwidth_um != null ? `${metadata.bandwidth_um.toFixed(4)} µm` : "N/A"],
+            ["Projeção WCS", metadata.wcs_projection?.join(" / ") ?? "N/A"],
+            ["Pixels Cobertos", metadata.data_quality ? `${metadata.data_quality.covered_pixels} / ${metadata.data_quality.total_pixels}` : "N/A"],
+            ["Flags (MSKNnnnn)", Object.entries(metadata.data_quality?.flag_counts ?? {}).map(([n, c]) => `${n}: ${c}`).join(", ") || "Nenhuma"],
+            ["NHITS Médio", metadata.data_quality?.nhits_mean?.toFixed?.(2) ?? "N/A"]
+          ]) {
+            const line = document.createElement("p");
+            line.textContent = `${name}: ${value}`;
+            card.append(line);
+          }
+          columns.append(card);
+        }
+        panel.append(columns);
+        panel.style.display = uiComplexityMode === "tech" ? "block" : "none";
+      }
+
+      function loadImageDataUrl(src) {
+        return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("Falha ao renderizar quadro."));
+          image.src = src;
+        });
+      }
+
+      function presentImage(imageData, label, { source = "", metadata1 = null, metadata2 = null } = {}) {
+        if (!imageData) throw new Error("A fonte não retornou uma imagem para exibição.");
+        document.getElementById("loading-indicator").style.display = "none";
+        document.getElementById("image-wrapper").style.display = "block";
+        document.getElementById("display-canvas").style.display = "block";
+        document.getElementById("display-canvas").src = imageData;
+        document.getElementById("video-render-canvas").style.display = "none";
+        document.getElementById("video-controls-bar").style.display = "none";
+        document.getElementById("epoch-label").textContent = label;
+        updateMetadataPanel(metadata1, metadata2);
+        if (source) setSourceBadge(source);
+      }
+
+      function presentImagePair(images, labels, metadata, speed, source) {
+        if (!Array.isArray(images) || images.length < 2 || !images[0] || !images[1]) {
+          if (images?.[0]) {
+            presentImage(images[0], labels?.[0] || "Imagem observada", {
+              source,
+              metadata1: metadata?.[0] || null
+            });
+            return;
+          }
+          throw new Error("A fonte não retornou imagens utilizáveis.");
+        }
+        imageCache.epoch1 = images[0];
+        imageCache.epoch2 = images[1];
+        imageCache.label1 = labels[0];
+        imageCache.label2 = labels[1];
+        presentImage(imageCache.epoch1, imageCache.label1, {
+          source,
+          metadata1: metadata?.[0] || null,
+          metadata2: metadata?.[1] || null
+        });
+        let showFirst = true;
+        animationInterval = setInterval(() => {
+          showFirst = !showFirst;
+          document.getElementById("display-canvas").src = showFirst ? imageCache.epoch1 : imageCache.epoch2;
+          document.getElementById("epoch-label").textContent = showFirst ? imageCache.label1 : imageCache.label2;
+        }, speed);
+      }
+
+      const INFRARED_SURVEY_GROUPS = {
+        wise: [
+          { survey: "WISE 3.4", label: "WISE W1 · 3,4 µm" },
+          { survey: "WISE 4.6", label: "WISE W2 · 4,6 µm" }
+        ],
+        "wise-mid": [
+          { survey: "WISE 12", label: "WISE W3 · 12 µm" },
+          { survey: "WISE 22", label: "WISE W4 · 22 µm" }
+        ],
+        "2mass": [
+          { survey: "2MASS-J", label: "2MASS J" },
+          { survey: "2MASS-K", label: "2MASS K" }
+        ],
+        iras: [
+          { survey: "IRAS 60 micron", label: "IRAS · 60 µm" },
+          { survey: "IRAS 100 micron", label: "IRAS · 100 µm" }
+        ],
+        akari: [
+          { survey: "AKARI N60", label: "AKARI N60" },
+          { survey: "AKARI N160", label: "AKARI N160" }
+        ]
+      };
+
+      function quickInfraredFallbackCandidates(preferredGroup = "wise") {
+        const representatives = [
+          INFRARED_SURVEY_GROUPS.wise[0],
+          INFRARED_SURVEY_GROUPS["wise-mid"][0],
+          INFRARED_SURVEY_GROUPS["2mass"][0],
+          INFRARED_SURVEY_GROUPS.iras[1],
+          INFRARED_SURVEY_GROUPS.akari[0]
+        ];
+        const preferred = INFRARED_SURVEY_GROUPS[preferredGroup] || INFRARED_SURVEY_GROUPS.wise;
+        const seen = new Set();
+        return [...preferred.slice(0, 2), ...representatives]
+          .filter((entry) => entry && !seen.has(entry.survey) && seen.add(entry.survey));
+      }
+
+      async function fetchFirstAvailableInfraredImage(coords, fovArcmin, preferredGroup, signal, candidateEntries = null) {
+        const fovDegrees = Math.max(0.01, Math.min(2, (Number(fovArcmin) || 10) / 60));
+        const entries = candidateEntries || quickInfraredFallbackCandidates(preferredGroup);
+        const attempts = entries.map(async (entry) => {
+          try {
+            const blob = await requestApi("/infrared", {
+              ra: coords.ra,
+              dec: coords.dec,
+              fov: String(fovDegrees),
+              survey: entry.survey,
+              filter: String(filterEnabled())
+            }, { responseType: "blob", timeoutMs: 12000, signal });
+            return { ...entry, src: await blobToDataUrl(blob) };
+          } catch (error) {
+            error.survey = entry.survey;
+            throw error;
+          }
+        });
+        try {
+          return { image: await Promise.any(attempts), errors: [] };
+        } catch (aggregate) {
+          return { image: null, errors: aggregate.errors || [aggregate] };
+        }
+      }
+
+      async function fetchInfraredSurveyImages(coords, fovArcmin, surveyEntries, { maxImages = 2, stopAfterFirstSuccess = false } = {}) {
+        const errors = [];
+        const fovDegrees = Math.max(0.01, Math.min(2, (Number(fovArcmin) || 10) / 60));
+        const images = [];
+        const entries = surveyEntries.slice();
+        const batchSize = stopAfterFirstSuccess ? 4 : 2;
+        for (let offset = 0; offset < entries.length && images.length < maxImages; offset += batchSize) {
+          const batch = entries.slice(offset, offset + batchSize);
+          const outcomes = await Promise.allSettled(batch.map(async (entry) => {
+            const blob = await requestApi("/infrared", {
+              ra: coords.ra,
+              dec: coords.dec,
+              fov: String(fovDegrees),
+              survey: entry.survey,
+              filter: String(filterEnabled())
+            }, { responseType: "blob", timeoutMs: 12000 });
+            return { label: entry.label, survey: entry.survey, src: await blobToDataUrl(blob) };
+          }));
+          for (const outcome of outcomes) {
+            if (outcome.status === "fulfilled") images.push(outcome.value);
+            else errors.push(outcome.reason);
+          }
+          if (stopAfterFirstSuccess && images.length) break;
+        }
+        return { images: images.slice(0, maxImages), errors };
+      }
+
+      function infraredFallbackCandidates(preferredGroup = "wise") {
+        const orderedGroups = [preferredGroup, "wise", "wise-mid", "2mass", "iras", "akari"];
+        const seen = new Set();
+        return orderedGroups.flatMap((key) => INFRARED_SURVEY_GROUPS[key] || [])
+          .filter((entry) => !seen.has(entry.survey) && seen.add(entry.survey));
+      }
+
+      /* Vídeo entre observações reais; quando SPHEREx falha, a rota usa ou tenta DSS. */
+      async function executeQuickMotionVideo(sourceOverride = null) {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("motion-video");
+        const target = getCurrentTargetObject();
+        const source = sourceOverride || document.getElementById("motion-source")?.value || "auto";
+        const detector = document.getElementById("spherex-detector")?.value || "2";
+        const fov = document.getElementById("input-fov")?.value || "10";
+
+        prepareDisplay(`Sincronizando épocas para ${target.name}...`);
+        let apiPayload;
+        if (source === "optical") {
+          try {
+            apiPayload = await requestApi("/motion_video", {
+              ra: coords.ra, dec: coords.dec, fov, source: "optical", detector, filter: String(filterEnabled())
+            }, { timeoutMs: 25000 });
+          } catch (error) {
+            showDataUnavailable("Blink DSS", [error]);
+            return;
+          }
+        } else {
+          const result = await fetchFastSpherexFallback(
+            "/motion_video",
+            { ra: coords.ra, dec: coords.dec, fov, source: "spherex", detector, filter: String(filterEnabled()) },
+            "/motion_video",
+            { ra: coords.ra, dec: coords.dec, fov, source: "optical", detector, filter: String(filterEnabled()) },
+            { alternativeDatabase: "DSS1/DSS2 (SkyView)" }
+          );
+          if (!result.payload) {
+            showDataUnavailable("Blink temporal", result.errors || []);
+            return;
+          }
+          apiPayload = result.payload;
+        }
+
+        if (!apiPayload?.images?.length) {
+          showDataUnavailable("Blink temporal");
+          return;
+        }
+        const sourceLabel = apiPayload.source === "optical" ? "DSS1/DSS2 (SkyView)" : "SPHEREx DR1/QR3";
+        if (apiPayload.source === "optical" && source !== "optical" && !lastFallbackLog?.fallbackSucceeded) {
+          reportDataFallback(
+            sourceLabel,
+            apiPayload.fallback_reason || "A comparação usa imagens observadas reais do DSS; não são dados SPHEREx."
+          );
+        }
+        const [f1, f2] = apiPayload.images;
+        videoState.labels = apiPayload.source === "optical"
+          ? [`DSS1 Blue · ${target.name}`, `DSS2 Blue · ${target.name}`]
+          : [`SPHEREx DR1 · ${target.name}`, `SPHEREx QR3 · ${target.name}`];
+        updateMetadataPanel(apiPayload.metadata?.[0], apiPayload.metadata?.[1]);
+        setSourceBadge(sourceLabel);
+
+        const [img1, img2] = await Promise.all([loadImageDataUrl(f1), loadImageDataUrl(f2)]);
+        videoState.image1 = img1;
+        videoState.image2 = img2;
+        videoState.phase = 0;
+        videoState.playing = true;
+        videoState.active = true;
+
+        const canvas = document.getElementById("video-render-canvas");
+        canvas.width = 520;
+        canvas.height = 520;
+        document.getElementById("display-canvas").style.display = "none";
+        canvas.style.display = "block";
+        document.getElementById("loading-indicator").style.display = "none";
+        document.getElementById("image-wrapper").style.display = "block";
+        document.getElementById("video-controls-bar").style.display = "flex";
+        document.getElementById("btn-video-play").textContent = "Pausar";
+
+        const caption = document.getElementById("viewer-caption-text");
+        if (caption) {
+          caption.innerHTML = `<strong>Vídeo Temporal (${target.name}):</strong> ${target.description}`;
+        }
+
+        videoState.frameRequest = requestAnimationFrame(renderBlinkVideoFrame);
+      }
+
+      function renderBlinkVideoFrame() {
+        if (!videoState.active || !videoState.image1 || !videoState.image2) return;
+        const canvas = document.getElementById("video-render-canvas");
+        const context = canvas.getContext("2d");
+        if (videoState.playing) {
+          videoState.phase = (videoState.phase + 0.006 * videoState.speed) % 1;
+        }
+        const wave = videoState.phase < 0.5 ? videoState.phase * 2 : (1 - videoState.phase) * 2;
+        const alpha = videoState.crossfade ? wave : (wave >= 0.5 ? 1 : 0);
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.globalAlpha = 1;
+        context.drawImage(videoState.image1, 0, 0, canvas.width, canvas.height);
+        context.globalAlpha = alpha;
+        context.drawImage(videoState.image2, 0, 0, canvas.width, canvas.height);
+        context.globalAlpha = 1;
+
+        document.getElementById("epoch-label").textContent = wave < 0.5 ? videoState.labels[0] : videoState.labels[1];
+        videoState.frameRequest = requestAnimationFrame(renderBlinkVideoFrame);
+      }
+
+      function toggleVideoPlay() {
+        videoState.playing = !videoState.playing;
+        document.getElementById("btn-video-play").textContent = videoState.playing ? "Pausar" : "Reproduzir";
+      }
+
+      function toggleVideoInterp() {
+        videoState.crossfade = !videoState.crossfade;
+        const btn = document.getElementById("btn-video-interp");
+        btn.textContent = videoState.crossfade ? "Transição Suave" : "Alternância Direta";
+        btn.classList.toggle("active", videoState.crossfade);
+      }
+
+      function downloadAnimatedSnapshot() {
+        const canvas = document.getElementById("video-render-canvas");
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = `sky-researcher-${selectedCatalogId || "target"}.png`;
+        link.click();
+      }
+
+      function downloadWebmVideo() {
+        const canvas = document.getElementById("video-render-canvas");
+        if (!canvas.captureStream || !window.MediaRecorder) {
+          downloadAnimatedSnapshot();
+          return;
+        }
+        const stream = canvas.captureStream(30);
+        let recorder;
+        try {
+          recorder = new MediaRecorder(stream);
+        } catch (err) {
+          stream.getTracks().forEach((t) => t.stop());
+          downloadAnimatedSnapshot();
+          return;
+        }
+        const chunks = [];
+        recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+        recorder.onstop = () => {
+          const url = URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `sky-researcher-${selectedCatalogId || "epoch"}.webm`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        recorder.start();
+        setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, 3000);
+      }
+
+      /* 2. Blink Discreto SPHEREx */
+      async function executeSpherexBlink() {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("spherex-blink");
+        const target = getCurrentTargetObject();
+        const detector = document.getElementById("spherex-detector").value;
+        const fov = document.getElementById("input-fov").value || "10";
+        const speed = parseInt(document.getElementById("select-speed").value) || 600;
+
+        prepareDisplay(`Alinhando épocas para ${target.name}...`);
+        const result = await fetchFastSpherexFallback(
+          "/spherex/blink",
+          { ra: coords.ra, dec: coords.dec, fov, detector, filter: String(filterEnabled()) },
+          "/motion_video",
+          { ra: coords.ra, dec: coords.dec, fov, source: "optical", detector, filter: String(filterEnabled()) },
+          { alternativeDatabase: "DSS1/DSS2 (SkyView)" }
+        );
+        if (!result.payload) {
+          showDataUnavailable("Blink temporal", result.errors || []);
+          return;
+        }
+        const apiPayload = result.payload;
+        let sourceLabel = result.source === "fallback" ? "DSS1/DSS2 (SkyView)" : "SPHEREx DR1/QR3";
+        const isOptical = result.source === "fallback" || apiPayload.source === "optical";
+        if (isOptical) sourceLabel = "DSS1/DSS2 (SkyView)";
+        const labels = isOptical
+          ? [`DSS1 Blue · ${target.name}`, `DSS2 Blue · ${target.name}`]
+          : [`SPHEREx DR1 · D${detector} · ${target.name}`, `SPHEREx QR3 · D${detector} · ${target.name}`];
+        presentImagePair(apiPayload.images, labels, apiPayload.metadata, speed, sourceLabel);
+      }
+
+      /* 3. Isolar Movimento (Subtração) e Soma (Stack) */
+      async function executeSpherexCombination(operation) {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton(operation === "subtract" ? "spherex-subtract" : "spherex-add");
+        const target = getCurrentTargetObject();
+        const detector = document.getElementById("spherex-detector").value;
+        const fov = document.getElementById("input-fov").value || "10";
+
+        prepareDisplay(operation === "subtract" ? "Isolando movimento entre épocas..." : "Combinando exposições...");
+        const fallbackPath = operation === "subtract" ? "/subtract" : "/add";
+        const result = await fetchFastSpherexFallback(
+          `/spherex/${operation}`,
+          { ra: coords.ra, dec: coords.dec, fov, detector, filter: String(filterEnabled()) },
+          fallbackPath,
+          { ra: coords.ra, dec: coords.dec, fov, filter: String(filterEnabled()) },
+          { alternativeDatabase: "DSS SkyView", responseType: "blob" }
+        );
+        if (!result.payload) {
+          showDataUnavailable(operation === "subtract" ? "subtração temporal" : "soma temporal", result.errors || []);
+          return;
+        }
+        const isFallback = result.source === "fallback";
+        const apiPayload = isFallback ? null : result.payload;
+        const imageData = isFallback ? await blobToDataUrl(result.payload) : apiPayload.image_data;
+        const metadata = apiPayload?.metadata || null;
+        const sourceLabel = isFallback ? "DSS SkyView" : "SPHEREx DR1/QR3";
+
+        presentImage(imageData, operation === "subtract"
+          ? `Diferença DSS2 − DSS1 · ${target.name}`
+          : `Soma DSS1 + DSS2 · ${target.name}`, {
+          source: sourceLabel,
+          metadata1: metadata?.[0] || null,
+          metadata2: metadata?.[1] || null
+        });
+
+        document.getElementById("viewer-caption-text").innerHTML = operation === "subtract"
+          ? `<strong>Subtração (${target.name}):</strong> Fonte: ${sourceLabel}. Esta saída não é apresentada como uma subtração SPHEREx quando os dados primários estão indisponíveis.`
+          : `<strong>Soma (${target.name}):</strong> Fonte: ${sourceLabel}. Esta saída não é apresentada como uma combinação SPHEREx quando os dados primários estão indisponíveis.`;
+
+        if (isFallback) {
+          void Promise.allSettled(["1", "2"].map((epoch) => requestApi("/blink_with_metadata", {
+            ra: coords.ra, dec: coords.dec, epoch, fov, filter: String(filterEnabled())
+          }, { timeoutMs: 12000 }))).then((metadataResults) => {
+            const metadata1 = metadataResults[0].status === "fulfilled" ? metadataResults[0].value.metadata : null;
+            const metadata2 = metadataResults[1].status === "fulfilled" ? metadataResults[1].value.metadata : null;
+            if (metadata1 || metadata2) updateMetadataPanel(metadata1, metadata2);
+          });
+        }
+      }
+
+      /* 4. Visão Infravermelha (Cubo SPHEREx / Failover WISE) */
+      async function executeSpherexBand({ includeWiseComparison = false } = {}) {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("spherex-band");
+        const target = getCurrentTargetObject();
+        const mode = document.getElementById("spherex-mode").value;
+        const band = document.getElementById("spherex-band").value;
+        const fov = document.getElementById("input-fov").value || "10";
+        const selectedGroup = document.getElementById("infrared-surveys")?.value || "wise";
+
+        prepareDisplay(`Consultando SPHEREx e surveys alternativos em paralelo para ${target.name}…`);
+        const primaryController = new AbortController();
+        const fallbackController = new AbortController();
+        const primaryPromise = requestApi("/spherex/band", {
+          ra: coords.ra, dec: coords.dec, fov, band, mode, filter: String(filterEnabled())
+        }, { timeoutMs: 30000, signal: primaryController.signal })
+          .then((payload) => ({ payload }), (error) => ({ error }));
+        const fallbackPromise = fetchFirstAvailableInfraredImage(
+          coords, fov, selectedGroup, fallbackController.signal
+        );
+
+        const first = await Promise.race([
+          primaryPromise.then((result) => ({ kind: "primary", result })),
+          fallbackPromise.then((result) => ({ kind: "fallback", result }))
+        ]);
+
+        let frame = null;
+        let sourceLabel = "";
+        let metadata1 = null;
+        if (first.kind === "primary" && first.result.payload) {
+          fallbackController.abort();
+          const apiPayload = first.result.payload;
+          frame = apiPayload.image_data;
+          sourceLabel = apiPayload.source || "SPHEREx DR1 All-Sky Cube";
+          metadata1 = apiPayload.metadata || null;
+          lastFallbackLog = null;
+        } else if (first.kind === "fallback" && first.result.image) {
+          primaryController.abort();
+          frame = first.result.image.src;
+          sourceLabel = `${first.result.image.survey} (SkyView)`;
+          reportDataFallback(sourceLabel, "Imagem observacional real carregada em paralelo para reduzir a espera; não representa SPHEREx.");
+        } else {
+          let primaryResult = first.kind === "primary" ? first.result : await primaryPromise;
+          const fallbackResult = first.kind === "fallback" ? first.result : await fallbackPromise;
+          if (primaryResult.error?.status === 422) {
+            fallbackController.abort();
+            showParameterError(primaryResult.error);
+            return;
+          }
+          if (primaryResult.error) {
+            handleSpherexExceptionFallback({
+              alternativeDatabase: "WISE / 2MASS / IRAS / AKARI (SkyView)",
+              endpoint: primaryResult.error.url || `${BASE_API_URL}/spherex/band`,
+              statusCode: primaryResult.error.status || 502,
+              errorDetail: apiErrorMessage(primaryResult.error)
+            });
+          }
+          if (primaryResult.payload) {
+            frame = primaryResult.payload.image_data;
+            sourceLabel = primaryResult.payload.source || "SPHEREx DR1 All-Sky Cube";
+            metadata1 = primaryResult.payload.metadata || null;
+            lastFallbackLog = null;
+          } else if (fallbackResult.image) {
+            frame = fallbackResult.image.src;
+            sourceLabel = `${fallbackResult.image.survey} (SkyView)`;
+            reportDataFallback(sourceLabel, "Imagem observacional real de outro levantamento infravermelho; não representa SPHEREx.");
+          } else {
+            const errors = [...(fallbackResult.errors || [])];
+            if (primaryResult.error) errors.unshift(primaryResult.error);
+            showDataUnavailable("imagem infravermelha", errors);
+            return;
+          }
+        }
+
+        presentImage(frame, `Visão Infravermelha · ${target.name}`, {
+          source: sourceLabel,
+          metadata1,
+          metadata2: null
+        });
+
+        document.getElementById("viewer-caption-text").innerHTML =
+          `<strong>Visão Infravermelha (${target.name}):</strong> ${target.description}`;
+
+        if (includeWiseComparison || shouldLoadWiseContext()) void renderMultiMissionContext(target, "wise");
+      }
+
+      /* 5. Bancos Auxiliares Diretos (DSS e WISE) */
+      async function executeBlinkComparator() {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("blink-optical");
+        const target = getCurrentTargetObject();
+        const speed = parseInt(document.getElementById("select-speed").value) || 600;
+
+        prepareDisplay("Carregando levantamentos ópticos DSS1 e DSS2...");
+        try {
+          const payload = await requestApi("/motion_video", {
+            ra: coords.ra, dec: coords.dec, fov: document.getElementById("input-fov").value || "10",
+            source: "optical", filter: String(filterEnabled())
+          });
+          presentImagePair(payload.images, [`DSS1 Blue · ${target.name}`, `DSS2 Blue · ${target.name}`], payload.metadata, speed, "DSS1/DSS2 (SkyView)");
+        } catch (error) {
+          showDataUnavailable("Blink DSS", [error]);
+        }
+      }
+
+      async function executeImageSubtraction() {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("subtract-optical");
+        const target = getCurrentTargetObject();
+        prepareDisplay("Calculando diferença óptica (DSS2 − DSS1)...");
+        try {
+          const fov = document.getElementById("input-fov").value || "10";
+          const blob = await requestApi("/subtract", {
+            ra: coords.ra, dec: coords.dec, fov, filter: String(filterEnabled())
+          }, { responseType: "blob" });
+          const metadataResults = await Promise.allSettled(["1", "2"].map((epoch) =>
+            requestApi("/blink_with_metadata", { ra: coords.ra, dec: coords.dec, epoch, fov, filter: String(filterEnabled()) })
+          ));
+          const metadata1 = metadataResults[0].status === "fulfilled" ? metadataResults[0].value.metadata : null;
+          const metadata2 = metadataResults[1].status === "fulfilled" ? metadataResults[1].value.metadata : null;
+          presentImage(await blobToDataUrl(blob), `Subtração DSS2 − DSS1 · ${target.name}`, {
+            source: "DSS SkyView", metadata1, metadata2
+          });
+        } catch (error) {
+          showDataUnavailable("subtração óptica DSS", [error]);
+        }
+      }
+
+      async function executeImageAddition() {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("add-optical");
+        const target = getCurrentTargetObject();
+        prepareDisplay("Somando épocas ópticas (DSS1 + DSS2)...");
+        try {
+          const blob = await requestApi("/add", {
+            ra: coords.ra, dec: coords.dec, fov: document.getElementById("input-fov").value || "10", filter: String(filterEnabled())
+          }, { responseType: "blob" });
+          presentImage(await blobToDataUrl(blob), `Soma DSS1 + DSS2 · ${target.name}`, { source: "DSS SkyView" });
+        } catch (error) {
+          showDataUnavailable("soma óptica DSS", [error]);
+        }
+      }
+
+      async function executeInfraredBlink() {
+        const coords = requireCoordinates();
+        if (!coords) return;
+        highlightSimpleActionButton("infrared");
+        const target = getCurrentTargetObject();
+        const speed = parseInt(document.getElementById("select-speed").value) || 600;
+        const surveyKey = document.getElementById("infrared-surveys").value || "wise";
+        prepareDisplay("Consultando imagens reais dos surveys infravermelhos selecionados...");
+        const requestedSurveys = INFRARED_SURVEY_GROUPS[surveyKey] || INFRARED_SURVEY_GROUPS.wise;
+        const fov = document.getElementById("input-fov").value || "10";
+        const result = await fetchInfraredSurveyImages(
+          coords, fov, requestedSurveys, { maxImages: 2 }
+        );
+        if (result.images.length < 2) {
+          const usedSurveys = new Set(result.images.map((image) => image.survey));
+          const alternatives = quickInfraredFallbackCandidates(surveyKey)
+            .filter((entry) => !usedSurveys.has(entry.survey));
+          const additional = await fetchFirstAvailableInfraredImage(
+            coords, fov, surveyKey, null, alternatives
+          );
+          if (additional.image) result.images.push(additional.image);
+          result.errors.push(...additional.errors);
+        }
+        if (!result.images.length) {
+          showDataUnavailable("surveys infravermelhos", result.errors);
+          return;
+        }
+        const requestedNames = new Set(requestedSurveys.map((entry) => entry.survey));
+        const substituted = result.images.some((image) => !requestedNames.has(image.survey));
+        if (substituted) {
+          reportSurveyFallback(requestedSurveys.map((entry) => entry.survey).join(" / "), result.images.map((image) => image.survey));
+        }
+        if (result.images.length === 1) {
+          presentImage(result.images[0].src, `${result.images[0].label} · ${target.name}`, {
+            source: `${result.images[0].survey} (SkyView)`
+          });
+          document.getElementById("viewer-caption-text").textContent =
+            `O survey ${result.images[0].survey} retornou uma imagem real; a segunda banda não tem cobertura disponível para este campo.`;
+          return;
+        }
+        presentImagePair(
+          result.images.map((item) => item.src),
+          result.images.map((item) => `${item.label} · ${target.name}`),
+          null,
+          speed,
+          "SkyView · surveys infravermelhos"
+        );
+      }
+
+      async function renderMultiMissionContext(target, kind) {
+        const section = document.getElementById("guided-comparison");
+        if (!section) return;
+        const requestId = ++guidedComparisonRequest;
+        section.replaceChildren();
+        const heading = document.createElement("h4");
+        heading.textContent = kind === "wise"
+          ? `Comparação Infravermelho vs. Luz Visível — ${target.name}`
+          : `Comparação Multi-Época — ${target.name}`;
+        section.append(heading);
+        const grid = document.createElement("div");
+        grid.className = "guided-comparison-grid";
+        const coords = { ra: target.ra, dec: target.dec };
+        const fov = document.getElementById("input-fov").value || "10";
+        const items = [];
+        if (kind === "wise") {
+          const [infrared, optical] = await Promise.allSettled([
+            fetchInfraredSurveyImages(coords, fov, INFRARED_SURVEY_GROUPS.wise, { maxImages: 2 }),
+            requestApi("/blink_with_metadata", { ...coords, epoch: "2", fov, filter: String(filterEnabled()) })
+          ]);
+          if (requestId !== guidedComparisonRequest) return;
+          if (infrared.status === "fulfilled") {
+            items.push(...infrared.value.images.map((image) => ({ label: image.label, src: image.src, note: `Survey real: ${image.survey}` })));
+          }
+          if (optical.status === "fulfilled") {
+            items.push({ label: "DSS2 Blue", src: optical.value.image_data, note: "Levantamento óptico real · SkyView" });
+          }
+        } else {
+          const [first, second, difference] = await Promise.allSettled([
+            requestApi("/blink_with_metadata", { ...coords, epoch: "1", fov, filter: String(filterEnabled()) }),
+            requestApi("/blink_with_metadata", { ...coords, epoch: "2", fov, filter: String(filterEnabled()) }),
+            requestApi("/subtract", { ...coords, fov, filter: String(filterEnabled()) }, { responseType: "blob" })
+          ]);
+          if (requestId !== guidedComparisonRequest) return;
+          if (first.status === "fulfilled") items.push({ label: "DSS1 Blue", src: first.value.image_data, note: "Levantamento óptico real · SkyView" });
+          if (second.status === "fulfilled") items.push({ label: "DSS2 Blue", src: second.value.image_data, note: "Levantamento óptico real · SkyView" });
+          if (difference.status === "fulfilled") items.push({ label: "DSS2 − DSS1", src: await blobToDataUrl(difference.value), note: "Subtração calculada com imagens DSS reais" });
+        }
+        if (!items.length) {
+          const empty = document.createElement("p");
+          empty.textContent = "Os levantamentos de referência também não retornaram imagens para este campo.";
+          section.append(empty);
+          section.style.display = "block";
+          return;
+        }
+        for (const item of items) {
+          const card = document.createElement("article");
+          card.className = "guided-comparison-card";
+          const h5 = document.createElement("h5");
+          h5.textContent = item.label;
+          const img = document.createElement("img");
+          img.src = item.src;
+          img.alt = item.label;
+          const p = document.createElement("p");
+          p.textContent = item.note;
+          card.append(h5, img, p);
+          grid.append(card);
+        }
+        section.append(grid);
+        section.style.display = "block";
+      }
+
+      /* 6. Assinatura Espectral Infravermelha (0,75–5,00 µm) */
+      async function executeSpherexSpectrumQuickLook() {
+        highlightSimpleActionButton("spherex-spectrum");
+        const target = getCurrentTargetObject();
+        const coords = requireCoordinates() || { ra: target.ra, dec: target.dec };
+        const spectrumImage = document.getElementById("spectrum-result");
+        const fallbackImage = document.getElementById("spectrum-fallback-image");
+        const fallbackNote = document.getElementById("spectrum-fallback-note");
+        const status = document.getElementById("spectrum-status");
+        document.getElementById("spectrum-data").value = "";
+        spectrumImage.style.display = "none";
+        fallbackImage.style.display = "none";
+        fallbackNote.style.display = "none";
+        status.textContent = "Consultando espectro SPHEREx e imagem alternativa em paralelo…";
+        const primaryController = new AbortController();
+        const fallbackController = new AbortController();
+        const primaryPromise = requestApi("/spherex/spectrum", coords, {
+          timeoutMs: 30000,
+          signal: primaryController.signal
+        }).then((payload) => ({ payload }), (error) => ({ error }));
+        const fallbackPromise = fetchFirstAvailableInfraredImage(
+          coords,
+          document.getElementById("input-fov").value || target.fov || "10",
+          document.getElementById("infrared-surveys")?.value || "wise",
+          fallbackController.signal
+        );
+        const first = await Promise.race([
+          primaryPromise.then((result) => ({ kind: "primary", result })),
+          fallbackPromise.then((result) => ({ kind: "fallback", result }))
+        ]);
+        let apiPayload = null;
+        let fallbackResult = null;
+        if (first.kind === "primary" && first.result.payload) {
+          fallbackController.abort();
+          apiPayload = first.result.payload;
+          lastFallbackLog = null;
+        } else if (first.kind === "fallback" && first.result.image) {
+          primaryController.abort();
+          fallbackResult = first.result;
+        } else {
+          const primaryResult = first.kind === "primary" ? first.result : await primaryPromise;
+          fallbackResult = first.kind === "fallback" ? first.result : await fallbackPromise;
+          if (primaryResult.error?.status === 422) {
+            fallbackController.abort();
+            showParameterError(primaryResult.error);
+            return;
+          }
+          if (primaryResult.error) {
+            handleSpherexExceptionFallback({
+              alternativeDatabase: "WISE / 2MASS / IRAS / AKARI (SkyView)",
+              endpoint: primaryResult.error.url || `${BASE_API_URL}/spherex/spectrum`,
+              statusCode: primaryResult.error.status || 502,
+              errorDetail: apiErrorMessage(primaryResult.error)
+            });
+          }
+          if (primaryResult.payload) apiPayload = primaryResult.payload;
+        }
+
+        if (!apiPayload && fallbackResult?.image) {
+          fallbackImage.src = fallbackResult.image.src;
+          fallbackImage.alt = `Imagem infravermelha real de ${fallbackResult.image.survey} para ${target.name}`;
+          fallbackImage.style.display = "block";
+          fallbackNote.textContent = `Imagem real de ${fallbackResult.image.survey}; este recurso não substitui um espectro.`;
+          fallbackNote.style.display = "block";
+          status.textContent = `Imagem alternativa · ${fallbackResult.image.survey}`;
+          reportDataFallback(`${fallbackResult.image.survey} (SkyView)`, "Imagem observacional real exibida enquanto o espectro SPHEREx não está disponível.");
+          updateSpectrumTargetSummary();
+          return;
+        }
+        if (!apiPayload) {
+          status.textContent = "Nenhum espectro ou imagem alternativa disponível.";
+          showDataUnavailable("espectro SPHEREx e imagens infravermelhas alternativas", fallbackResult?.errors || []);
+          return;
+        }
+
+        if (apiPayload?.wavelengths_um?.length) {
+          const rows = apiPayload.wavelengths_um.map((w, i) => `${Number(w).toFixed(3)}, ${Number(apiPayload.flux_mjy_sr[i]).toFixed(6)}`);
+          document.getElementById("spectrum-data").value = rows.join("\n");
+          spectrumImage.src = apiPayload.image_data;
+          spectrumImage.style.display = "block";
+          status.textContent = `Espectro real · ${apiPayload.source || "SPHEREx DR1"} · ${rows.length} canais`;
+          updateSpectrumTargetSummary();
+          return;
+        } else {
+          if (!fallbackResult?.image) {
+            status.textContent = "Nenhum espectro ou imagem alternativa disponível.";
+            showDataUnavailable("espectro SPHEREx e imagens infravermelhas alternativas", fallbackResult?.errors || []);
+            return;
+          }
+          fallbackImage.src = fallbackResult.image.src;
+          fallbackImage.alt = `Imagem infravermelha real de ${fallbackResult.image.survey} para ${target.name}`;
+          fallbackImage.style.display = "block";
+          fallbackNote.textContent = `Não foi possível obter o espectro SPHEREx. Exibindo imagem real do survey ${fallbackResult.image.survey}; ela não é um espectro.`;
+          fallbackNote.style.display = "block";
+          status.textContent = `Sem espectro · alternativa real: ${fallbackResult.image.survey}`;
+          reportDataFallback(`${fallbackResult.image.survey} (SkyView)`, "A tela mostra uma imagem infravermelha real; não foi gerado um espectro alternativo.");
+        }
+        updateSpectrumTargetSummary();
+      }
+
+      function renderClientSideSpectrumPlot(text, customTitle = "Espectro Infravermelho (0,75–5,00 µm)") {
+        const rows = text.split(/\r?\n/)
+          .map((r) => r.trim())
+          .filter((r) => r && !r.startsWith("#"))
+          .map((r) => r.split(",").map((c) => Number(c.trim())))
+          .filter((vals) => vals.length >= 2 && Number.isFinite(vals[0]) && Number.isFinite(vals[1]))
+          .sort((a, b) => a[0] - b[0]);
+
+        if (rows.length < 2) {
+          throw new Error("Informe pelo menos 2 linhas válidas.");
+        }
+
+        const c = document.createElement("canvas");
+        c.width = 820;
+        c.height = 430;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#050b1c";
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        const padL = 74, padR = 30, padT = 54, padB = 56;
+        const plotW = c.width - padL - padR;
+        const plotH = c.height - padT - padB;
+
+        const xs = rows.map((r) => r[0]);
+        const ys = rows.map((r) => r[1]);
+        const minX = Math.min(0.75, ...xs), maxX = Math.max(5.0, ...xs);
+        const minY = 0, maxY = Math.max(...ys) * 1.18;
+        const spanX = Math.max(maxX - minX, 1e-6);
+        const spanY = Math.max(maxY - minY, 1e-6);
+
+        const bands = [
+          { w1: 2.65, w2: 3.25, label: "H2O / Gelo (~3,0 µm)", color: "rgba(37, 184, 255, 0.12)" },
+          { w1: 4.18, w2: 4.38, label: "CO2 (4,26 µm)", color: "rgba(230, 255, 0, 0.12)" },
+          { w1: 4.55, w2: 4.82, label: "CO (4,67 µm)", color: "rgba(46, 229, 157, 0.12)" }
+        ];
+        for (const b of bands) {
+          const x1 = padL + ((b.w1 - minX) / spanX) * plotW;
+          const x2 = padL + ((b.w2 - minX) / spanX) * plotW;
+          ctx.fillStyle = b.color;
+          ctx.fillRect(x1, padT, x2 - x1, plotH);
+          ctx.fillStyle = "#a9c2e6";
+          ctx.font = "11px 'Overpass', sans-serif";
+          ctx.fillText(b.label, x1 + 4, padT + 16);
+        }
+
+        ctx.strokeStyle = "rgba(148, 179, 226, 0.18)";
+        ctx.lineWidth = 1;
+        ctx.fillStyle = "#99aecb";
+        ctx.font = "12px 'JetBrains Mono', monospace";
+
+        for (let i = 0; i <= 4; i++) {
+          const y = padT + (plotH * i) / 4;
+          ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+          const val = (maxY - (spanY * i) / 4).toFixed(2);
+          ctx.fillText(val, 14, y + 4);
+        }
+        for (let i = 0; i <= 5; i++) {
+          const x = padL + (plotW * i) / 5;
+          ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+          const val = (minX + (spanX * i) / 5).toFixed(2);
+          ctx.fillText(`${val} µm`, x - 22, padT + plotH + 26);
+        }
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 15px 'Fira Sans', sans-serif";
+        ctx.fillText(customTitle, padL, 30);
+
+        ctx.strokeStyle = "#25b8ff";
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        rows.forEach((r, idx) => {
+          const px = padL + ((r[0] - minX) / spanX) * plotW;
+          const py = padT + plotH - ((r[1] - minY) / spanY) * plotH;
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+
+        rows.forEach((r) => {
+          const px = padL + ((r[0] - minX) / spanX) * plotW;
+          const py = padT + plotH - ((r[1] - minY) / spanY) * plotH;
+          if (Number.isFinite(r[2]) && r[2] > 0) {
+            const errPx = (r[2] / spanY) * plotH;
+            ctx.strokeStyle = "rgba(230, 255, 0, 0.78)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(px, py - errPx);
+            ctx.lineTo(px, py + errPx);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#e6ff00";
+          ctx.beginPath();
+          ctx.arc(px, py, 4.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        return { dataUrl: c.toDataURL("image/png"), count: rows.length };
+      }
+
+      function executeSpectrumQuickLook(customTitle) {
+        const spectrumText = document.getElementById("spectrum-data").value;
+        const spectrumImage = document.getElementById("spectrum-result");
+        try {
+          const plot = renderClientSideSpectrumPlot(spectrumText, customTitle || "Assinatura Espectral Infravermelha (MJy/sr)");
+          spectrumImage.src = plot.dataUrl;
+          spectrumImage.style.display = "block";
+          document.getElementById("spectrum-status").textContent = `${plot.count} faixas analisadas`;
+        } catch (err) {
+          // Ignora linhas vazias
+        }
+      }
+
+      function downloadSpectrumCsv() {
+        const text = document.getElementById("spectrum-data").value.trim();
+        const blob = new Blob([`# wavelength_um,flux_mjy_sr,uncertainty\n${text}\n`], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `sky-researcher-spectrum-${selectedCatalogId || "custom"}.csv`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function updateSpectrumTargetSummary() {
+        const target = getCurrentTargetObject();
+        const el = document.getElementById("spectrum-target-summary");
+        if (el) {
+          el.textContent = `Astro: ${target.name} (${target.type_label})`;
+        }
+      }
+
+      /* Mapa Estelar Interativo */
+      function catalogMatchesFilter(item) {
+        return catalogFilter === "all" || item.category === catalogFilter;
+      }
+
+      function renderCatalogList() {
+        const list = document.getElementById("catalog-list");
+        if (!list) return;
+        list.replaceChildren();
+        const sortedItems = CELESTIAL_CATALOG.filter(catalogMatchesFilter).sort((left, right) => {
+          const leftDistance = left.distance_ly, rightDistance = right.distance_ly;
+          if (leftDistance == null) return rightDistance == null ? 0 : 1;
+          if (rightDistance == null) return -1;
+          return leftDistance - rightDistance;
+        });
+        const maxLogDistance = Math.log10(1 + 30000000);
+        for (const item of sortedItems) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `catalog-item${item.id === selectedMapObjectId ? " active" : ""}`;
+          button.dataset.category = item.category;
+          const distanceLy = item.distance_ly;
+          const distanceLog = distanceLy == null ? 0 : Math.log10(1 + distanceLy);
+          button.style.setProperty("--catalog-depth", `${Math.min(8, distanceLog * 0.9).toFixed(1)}px`);
+          const name = document.createElement("span");
+          name.className = "catalog-item-name";
+          name.textContent = item.name;
+          const distance = document.createElement("span");
+          distance.className = "catalog-distance";
+          distance.textContent = distanceLy == null ? "Distância não cadastrada" : item.distance;
+          button.append(name, distance);
+          if (distanceLy != null) {
+            const meter = document.createElement("span");
+            meter.className = "catalog-distance-meter";
+            const fill = document.createElement("span");
+            fill.style.width = `${Math.max(5, distanceLog / maxLogDistance * 100)}%`;
+            meter.append(fill);
+            button.append(meter);
+          }
+          button.addEventListener("click", () => selectMapObject(item.id));
+          list.append(button);
+        }
+      }
+
+      function getSkyMapPoint(raDeg, decDeg, width, height) {
+        const ra = ((raDeg % 360) + 360) % 360;
+        return { x: (360 - ra) / 360 * width, y: (90 - decDeg) / 180 * height };
+      }
+
+      function screenToSkyMapPoint(x, y, width, height) {
+        return {
+          x: (x - width / 2 - skyMapViewport.panX * width) / skyMapViewport.zoom + width / 2,
+          y: (y - height / 2 - skyMapViewport.panY * height) / skyMapViewport.zoom + height / 2
+        };
+      }
+
+      function skyMapPointToCoordinates(x, y, width, height) {
+        const point = screenToSkyMapPoint(x, y, width, height);
+        return {
+          ra: ((360 - point.x / width * 360) % 360 + 360) % 360,
+          dec: Math.max(-90, Math.min(90, 90 - point.y / height * 180))
+        };
+      }
+
+      function drawSkyMap() {
+        const canvas = document.getElementById("starmap-canvas");
+        if (!canvas || !canvas.clientWidth) return;
+        const width = canvas.clientWidth;
+        const height = width / 2;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#030712";
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        ctx.translate(width / 2 + skyMapViewport.panX * width, height / 2 + skyMapViewport.panY * height);
+        ctx.scale(skyMapViewport.zoom, skyMapViewport.zoom);
+        ctx.translate(-width / 2, -height / 2);
+
+        let seed = 20261115;
+        const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+        for (let i = 0; i < 160; i += 1) {
+          ctx.globalAlpha = 0.2 + random() * 0.45;
+          ctx.fillStyle = i % 11 === 0 ? "#25b8ff" : "#e2edff";
+          ctx.beginPath();
+          ctx.arc(random() * width, random() * height, random() * 1.3 + 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.font = "11px 'JetBrains Mono', monospace";
+        ctx.strokeStyle = "rgba(37, 184, 255, 0.16)";
+        ctx.fillStyle = "#7e95b8";
+        ctx.lineWidth = 1;
+        for (let ra = 0; ra <= 360; ra += 60) {
+          const x = (360 - ra) / 360 * width;
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+          const label = ra === 360 ? "24h" : `${ra / 15}h`;
+          ctx.fillText(label, Math.min(Math.max(x + 5, 4), width - 32), height - 8);
+        }
+        for (let dec = -90; dec <= 90; dec += 30) {
+          const y = (90 - dec) / 180 * height;
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+          ctx.fillText(`${dec > 0 ? "+" : ""}${dec}°`, 6, Math.max(14, y - 5));
+        }
+
+        const drawCurve = (coordinateAt, color) => {
+          ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.4; ctx.setLineDash([6, 6]); ctx.beginPath();
+          let previousX = null;
+          for (let angle = 0; angle <= 360; angle += 2) {
+            const coordinate = coordinateAt(angle * Math.PI / 180);
+            const point = getSkyMapPoint(coordinate.ra, coordinate.dec, width, height);
+            if (previousX !== null && Math.abs(point.x - previousX) > width / 2) ctx.moveTo(point.x, point.y);
+            else if (angle === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+            previousX = point.x;
+          }
+          ctx.stroke(); ctx.restore();
+        };
+        const galToEquatorial = (longitude) => {
+          const gx = Math.cos(longitude), gy = Math.sin(longitude);
+          const x = -0.0548755604 * gx + 0.4941094279 * gy;
+          const y = -0.8734370902 * gx - 0.4448296300 * gy;
+          const z = -0.4838350155 * gx + 0.7469822445 * gy;
+          return { ra: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360, dec: Math.asin(z) * 180 / Math.PI };
+        };
+        drawCurve(galToEquatorial, "rgba(230, 255, 0, 0.5)");
+        drawCurve((longitude) => {
+          const obliquity = 23.43928 * Math.PI / 180;
+          const x = Math.cos(longitude), y = Math.sin(longitude) * Math.cos(obliquity), z = Math.sin(longitude) * Math.sin(obliquity);
+          return { ra: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360, dec: Math.asin(z) * 180 / Math.PI };
+        }, "rgba(37, 184, 255, 0.5)");
+
+        for (const item of CELESTIAL_CATALOG.filter(catalogMatchesFilter)) {
+          const point = getSkyMapPoint(item.ra_deg, item.dec_deg, width, height);
+          const color = item.category === "challenge" ? "#e6ff00" : "#25b8ff";
+          const selected = item.id === selectedMapObjectId;
+          ctx.beginPath(); ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = selected ? 18 : 8;
+          ctx.arc(point.x, point.y, selected ? 6 : 3.8, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+          if (selected) {
+            ctx.beginPath(); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.6;
+            ctx.arc(point.x, point.y, 11, 0, Math.PI * 2); ctx.stroke();
+          }
+          ctx.fillStyle = selected ? "#ffffff" : "#c5d6f0";
+          ctx.font = selected ? "bold 11.5px 'Overpass', sans-serif" : "11px 'Overpass', sans-serif";
+          ctx.fillText(item.name, Math.min(point.x + 9, width - 155), Math.max(14, point.y - 7));
+        }
+        ctx.restore();
+      }
+
+      function distanceMapPoint(item, width, height) {
+        const distanceLy = item.distance_ly;
+        if (!Number.isFinite(distanceLy)) return null;
+        const ra = item.ra_deg * Math.PI / 180;
+        const dec = item.dec_deg * Math.PI / 180;
+        const distance = Math.log10(1 + distanceLy) / Math.log10(1 + 30000000);
+        const x = distance * Math.cos(dec) * Math.cos(ra);
+        const y = distance * Math.cos(dec) * Math.sin(ra);
+        const z = distance * Math.sin(dec);
+        const cosYaw = Math.cos(distanceMapRotation.yaw), sinYaw = Math.sin(distanceMapRotation.yaw);
+        const yawX = x * cosYaw - y * sinYaw;
+        const yawY = x * sinYaw + y * cosYaw;
+        const yawZ = z;
+        const cosPitch = Math.cos(distanceMapRotation.pitch), sinPitch = Math.sin(distanceMapRotation.pitch);
+        const rotatedY = yawY * cosPitch - yawZ * sinPitch;
+        const rotatedZ = yawY * sinPitch + yawZ * cosPitch;
+        const perspective = 1 / (1 - rotatedZ * 0.16);
+        const radius = Math.min(width * 0.43, height * 0.77);
+        return {
+          x: width / 2 + yawX * radius * perspective,
+          y: height / 2 - rotatedY * radius * perspective,
+          depth: rotatedZ,
+          distance
+        };
+      }
+
+      function drawDistanceMap() {
+        const canvas = document.getElementById("distance-map-canvas");
+        if (!canvas || !canvas.clientWidth || document.getElementById("starmap-distance-view")?.hidden) return;
+        const width = canvas.clientWidth;
+        const height = width / 1.8;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+
+        const centerX = width / 2, centerY = height / 2;
+        const radius = Math.min(width * 0.43, height * 0.77);
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 1.4);
+        gradient.addColorStop(0, "rgba(28, 76, 142, 0.28)");
+        gradient.addColorStop(1, "rgba(3, 7, 18, 0.05)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        const distanceGuides = [10, 100, 1000, 100000, 10000000];
+        ctx.save();
+        ctx.strokeStyle = "rgba(151, 202, 255, 0.13)";
+        ctx.fillStyle = "rgba(177, 205, 238, 0.56)";
+        ctx.lineWidth = 1;
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        for (const distanceLy of distanceGuides) {
+          const fraction = Math.log10(1 + distanceLy) / Math.log10(1 + 30000000);
+          const guideRadius = radius * fraction;
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY, guideRadius, guideRadius * 0.62, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillText(distanceLy >= 1000000 ? `${distanceLy / 1000000}M ly` : `${distanceLy >= 1000 ? `${distanceLy / 1000}k` : distanceLy} ly`, centerX + guideRadius + 4, centerY - 3);
+        }
+        ctx.setLineDash([4, 7]);
+        ctx.strokeStyle = "rgba(151, 202, 255, 0.25)";
+        ctx.beginPath(); ctx.moveTo(centerX - radius, centerY); ctx.lineTo(centerX + radius, centerY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(centerX, centerY - radius * 0.72); ctx.lineTo(centerX, centerY + radius * 0.72); ctx.stroke();
+        ctx.setLineDash([]);
+
+        const points = CELESTIAL_CATALOG
+          .filter(catalogMatchesFilter)
+          .map((item) => ({ item, point: distanceMapPoint(item, width, height) }))
+          .filter((entry) => entry.point)
+          .sort((left, right) => left.point.depth - right.point.depth);
+
+        for (const { item, point } of points) {
+          const color = item.category === "challenge" ? "#e6ff00" : "#56c8ff";
+          const selected = item.id === selectedMapObjectId;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.lineTo(point.x, point.y);
+          ctx.strokeStyle = selected ? "rgba(255,255,255,0.45)" : "rgba(142,186,233,0.17)";
+          ctx.lineWidth = selected ? 1.4 : 0.7;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = selected ? 20 : 10;
+          ctx.arc(point.x, point.y, selected ? 6 : 4.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          if (selected) {
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(255,255,255,0.92)";
+            ctx.lineWidth = 1.4;
+            ctx.arc(point.x, point.y, 11, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = selected ? "#ffffff" : "#c4d8f3";
+          ctx.font = selected ? "600 11px 'Overpass', sans-serif" : "10px 'Overpass', sans-serif";
+          ctx.fillText(item.name, Math.min(point.x + 9, width - 155), Math.max(14, point.y - 7));
+        }
+
+        ctx.beginPath();
+        ctx.fillStyle = "#f4f8ff";
+        ctx.shadowColor = "#25b8ff";
+        ctx.shadowBlur = 20;
+        ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "600 11px 'Overpass', sans-serif";
+        ctx.fillText("Terra", centerX + 10, centerY + 18);
+        ctx.restore();
+      }
+
+      function selectMapObject(targetId) {
+        const item = CELESTIAL_CATALOG.find((entry) => entry.id === targetId);
+        if (!item) return;
+        selectedMapObjectId = item.id;
+        document.getElementById("inspector-name").textContent = item.name;
+        document.getElementById("inspector-description").textContent = item.description;
+        const details = document.getElementById("inspector-details");
+        details.replaceChildren();
+        for (const [label, value] of [
+          ["Categoria", item.category === "challenge" ? "Alvo Oficial do Desafio NASA" : "Clássico do Céu"],
+          ["Classificação", item.type_label],
+          ["Distância", item.distance],
+          ["RA (J2000)", item.ra],
+          ["Dec (J2000)", item.dec],
+          ["FOV sugerido", `${item.fov} arcmin`]
+        ]) {
+          const term = document.createElement("dt"), description = document.createElement("dd");
+          term.textContent = label; description.textContent = value; details.append(term, description);
+        }
+        renderCatalogList();
+        drawSkyMap();
+        drawDistanceMap();
+      }
+
+      function findSkyMapObjectAt(x, y) {
+        const canvas = document.getElementById("starmap-canvas");
+        const width = canvas.clientWidth, height = width / 2;
+        let nearest = null, nearestDistance = 16;
+        for (const item of CELESTIAL_CATALOG.filter(catalogMatchesFilter)) {
+          const base = getSkyMapPoint(item.ra_deg, item.dec_deg, width, height);
+          const point = {
+            x: width / 2 + skyMapViewport.panX * width + (base.x - width / 2) * skyMapViewport.zoom,
+            y: height / 2 + skyMapViewport.panY * height + (base.y - height / 2) * skyMapViewport.zoom
+          };
+          const distance = Math.hypot(point.x - x, point.y - y);
+          if (distance < nearestDistance) { nearest = item; nearestDistance = distance; }
+        }
+        return nearest;
+      }
+
+      function findDistanceMapObjectAt(x, y) {
+        const canvas = document.getElementById("distance-map-canvas");
+        const width = canvas.clientWidth, height = width / 1.8;
+        let nearest = null, nearestDistance = 20;
+        for (const item of CELESTIAL_CATALOG.filter(catalogMatchesFilter)) {
+          const point = distanceMapPoint(item, width, height);
+          if (!point) continue;
+          const distance = Math.hypot(point.x - x, point.y - y);
+          if (distance < nearestDistance) { nearest = item; nearestDistance = distance; }
+        }
+        return nearest;
+      }
+
+      function switchStarmapView(view) {
+        const isDistance = view === "distance";
+        document.getElementById("starmap-sky-view").hidden = isDistance;
+        document.getElementById("starmap-distance-view").hidden = !isDistance;
+        document.querySelectorAll("[data-starmap-view]").forEach((button) => {
+          const active = button.dataset.starmapView === view;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-selected", String(active));
+        });
+        requestAnimationFrame(isDistance ? drawDistanceMap : drawSkyMap);
+      }
+
+      function setupDistanceMapControls() {
+        const canvas = document.getElementById("distance-map-canvas");
+        canvas.addEventListener("pointerdown", (event) => {
+          distanceMapDrag = { x: event.clientX, y: event.clientY, moved: false };
+          canvas.setPointerCapture(event.pointerId);
+        });
+        canvas.addEventListener("pointermove", (event) => {
+          if (!distanceMapDrag) return;
+          const dx = event.clientX - distanceMapDrag.x;
+          const dy = event.clientY - distanceMapDrag.y;
+          if (Math.abs(dx) + Math.abs(dy) > 2) distanceMapDrag.moved = true;
+          if (distanceMapDrag.moved) {
+            distanceMapRotation.yaw += dx * 0.008;
+            distanceMapRotation.pitch = Math.max(-1.25, Math.min(1.25, distanceMapRotation.pitch + dy * 0.008));
+            drawDistanceMap();
+          }
+          distanceMapDrag.x = event.clientX;
+          distanceMapDrag.y = event.clientY;
+        });
+        canvas.addEventListener("pointerup", (event) => {
+          if (!distanceMapDrag) return;
+          const moved = distanceMapDrag.moved;
+          distanceMapDrag = null;
+          if (!moved) {
+            const rect = canvas.getBoundingClientRect();
+            const item = findDistanceMapObjectAt(event.clientX - rect.left, event.clientY - rect.top);
+            if (item) selectMapObject(item.id);
+          }
+        });
+        canvas.addEventListener("pointercancel", () => { distanceMapDrag = null; });
+        document.getElementById("distance-map-reset").addEventListener("click", () => {
+          distanceMapRotation = { yaw: -0.58, pitch: 0.34 };
+          drawDistanceMap();
+        });
+      }
+
+      function setupSkyMapControls() {
+        const canvas = document.getElementById("starmap-canvas");
+        const zoom = document.getElementById("map-zoom");
+        const zoomLabel = document.getElementById("map-zoom-value");
+        const updateZoom = () => {
+          skyMapViewport.zoom = Number(zoom.value) || 1;
+          const panLimit = Math.max(0, (skyMapViewport.zoom - 1) / 2);
+          skyMapViewport.panX = Math.max(-panLimit, Math.min(panLimit, skyMapViewport.panX));
+          skyMapViewport.panY = Math.max(-panLimit, Math.min(panLimit, skyMapViewport.panY));
+          zoomLabel.textContent = `${skyMapViewport.zoom.toFixed(1)}×`;
+          drawSkyMap();
+        };
+        zoom.addEventListener("input", updateZoom);
+        document.getElementById("map-reset").addEventListener("click", () => {
+          zoom.value = "1";
+          skyMapViewport = { zoom: 1, panX: 0, panY: 0 };
+          updateZoom();
+        });
+        canvas.addEventListener("pointerdown", (event) => {
+          skyMapDrag = { dragging: true, moved: false, x: event.clientX, y: event.clientY };
+          canvas.setPointerCapture(event.pointerId);
+        });
+        canvas.addEventListener("pointermove", (event) => {
+          if (skyMapDrag?.dragging) {
+            const dx = event.clientX - skyMapDrag.x, dy = event.clientY - skyMapDrag.y;
+            if (Math.abs(dx) + Math.abs(dy) > 2) skyMapDrag.moved = true;
+            if (skyMapDrag.moved) {
+              const rect = canvas.getBoundingClientRect();
+              skyMapViewport.panX += dx / rect.width;
+              skyMapViewport.panY += dy / rect.height;
+              const limit = Math.max(0, (skyMapViewport.zoom - 1) / 2);
+              skyMapViewport.panX = Math.max(-limit, Math.min(limit, skyMapViewport.panX));
+              skyMapViewport.panY = Math.max(-limit, Math.min(limit, skyMapViewport.panY));
+              drawSkyMap();
+            }
+            skyMapDrag.x = event.clientX;
+            skyMapDrag.y = event.clientY;
+            return;
+          }
+          const rect = canvas.getBoundingClientRect();
+          const item = findSkyMapObjectAt(
+            (event.clientX - rect.left) / rect.width * canvas.clientWidth,
+            (event.clientY - rect.top) / rect.height * (canvas.clientWidth / 2)
+          );
+          canvas.style.cursor = item ? "pointer" : "crosshair";
+          if (item) {
+            document.getElementById("map-coordinate-readout").textContent = item.name;
+          }
+        });
+        const finishDrag = () => {
+          if (skyMapDrag?.moved) {
+            ignoreSkyMapClick = true;
+            setTimeout(() => { ignoreSkyMapClick = false; }, 0);
+          }
+          skyMapDrag = null;
+        };
+        canvas.addEventListener("pointerup", finishDrag);
+        canvas.addEventListener("pointercancel", finishDrag);
+        canvas.addEventListener("click", (event) => {
+          if (ignoreSkyMapClick) return;
+          const rect = canvas.getBoundingClientRect();
+          const x = (event.clientX - rect.left) / rect.width * canvas.clientWidth;
+          const y = (event.clientY - rect.top) / rect.height * (canvas.clientWidth / 2);
+          const item = findSkyMapObjectAt(x, y);
+          const autoRun = document.getElementById("auto-run-on-map-click").checked;
+          if (item) {
+            selectMapObject(item.id);
+            selectPresetTarget(item.id, { autoExecute: autoRun });
+            return;
+          }
+          const coords = skyMapPointToCoordinates(x, y, canvas.clientWidth, canvas.clientWidth / 2);
+          selectedCatalogId = null;
+          setTargetCoordinates(coords.ra.toFixed(4), coords.dec.toFixed(4), 10);
+          document.getElementById("map-coordinate-readout").textContent = `RA ${coords.ra.toFixed(2)}° · Dec ${coords.dec.toFixed(2)}°`;
+          if (autoRun) {
+            switchPage("workbench");
+            executeQuickMotionVideo("auto");
+          }
+        });
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        renderPresetOptions();
+        setupSkyMapControls();
+
+        document.querySelectorAll(".nav-tab").forEach((tab) => {
+          tab.addEventListener("click", () => switchPage(tab.dataset.page));
+        });
+        document.querySelectorAll("[data-page-link]").forEach((button) => {
+          button.addEventListener("click", () => switchPage(button.dataset.pageLink));
+        });
+        document.querySelectorAll("[data-load-target]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectPresetTarget(button.dataset.loadTarget, { autoExecute: true });
+          });
+        });
+        document.querySelectorAll("[data-catalog-filter]").forEach((button) => {
+          button.addEventListener("click", () => {
+            catalogFilter = button.dataset.catalogFilter;
+            document.querySelectorAll("[data-catalog-filter]").forEach((item) => item.classList.toggle("active", item === button));
+            renderCatalogList();
+            drawSkyMap();
+            drawDistanceMap();
+          });
+        });
+        document.querySelectorAll("[data-starmap-view]").forEach((button) => {
+          button.addEventListener("click", () => switchStarmapView(button.dataset.starmapView));
+        });
+
+        document.getElementById("load-catalog-object").addEventListener("click", () => {
+          if (selectedMapObjectId) {
+            selectPresetTarget(selectedMapObjectId, { autoExecute: false });
+            switchPage("workbench");
+          }
+        });
+        document.getElementById("execute-catalog-action").addEventListener("click", () => {
+          if (selectedMapObjectId) {
+            selectPresetTarget(selectedMapObjectId, { autoExecute: true });
+          }
+        });
+
+        document.getElementById("video-speed-slider").addEventListener("input", (event) => {
+          videoState.speed = Number(event.target.value) || 1.5;
+        });
+
+        window.addEventListener("resize", drawSkyMap);
+        window.addEventListener("resize", drawDistanceMap);
+        setupDistanceMapControls();
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("ui") === "tech") {
+          toggleUiComplexityMode("tech");
+        }
+        const initialTarget = params.get("target") || "barnard";
+        selectMapObject(initialTarget);
+        selectPresetTarget(initialTarget, { autoExecute: false });
+        // A tela inicial e o preset não iniciam consultas; o usuário escolhe uma ação.
+        const initialPage = params.get("page") || "home";
+        switchPage(initialPage, { updateUrl: false });
+      });
+    </script>
+  </body>
+</html>
