@@ -31,9 +31,11 @@ Abra [http://127.0.0.1:8002](http://127.0.0.1:8002). A [documentação da API](h
 
 `mars_geometry(instant)` aceita `YYYY-MM-DDTHH:MM:SS` com uma fração opcional de até seis dígitos e fuso explícito (`Z` ou `±HH:MM`). A faixa UTC vai de `2000-01-01T00:00:00Z` (inclusive) a `2050-01-01T00:00:00Z` (exclusive). Entradas inválidas, fora da faixa ou com segundo `60` geram `ValueError`.
 
-O dicionário retorna `instant_utc`, `length_unit` (`au`), `frame` (origem no centro do Sol e eixos paralelos ao ICRS) e `model` (`astropy:builtin`). `positions` contém os vetores geométricos `x, y, z` de `sun`, `earth` e `mars`. `distances` contém `mars_earth` e `mars_sun`, obtidas das diferenças entre os vetores 3D.
+O dicionário retorna `instant_utc` normalizado para UTC, `length_unit` (`au`), `frame` (origem no centro do Sol) e `model` (`astropy:builtin`). `positions` contém os vetores geométricos `x, y, z` de `sun`, `earth` e `mars`. `distances` contém `mars_earth` e `mars_sun`, obtidas das diferenças entre os vetores 3D. As componentes e as distâncias são valores `float`.
 
-Os valores são estimativas da efeméride embutida do Astropy/ERFA, calculadas no mesmo instante em TDB, sem correção de tempo de luz. Para datas futuras, a conversão de UTC para TDB usa os segundos intercalares conhecidos pelo Astropy. [Efemérides do Astropy](https://docs.astropy.org/en/stable/coordinates/solarsystem.html)
+O metadado `axes: "ICRS"` identifica os eixos nominais de `astropy:builtin`. O Astropy combina diretamente os vetores do Sol e da Terra derivados de `erfa.epv00`, com orientação BCRS, com o vetor heliocêntrico de Marte de `erfa.plan94`, expresso no equador e no equinócio médios de J2000.0. A combinação produz um alinhamento aproximado ao ICRS e usa a convenção nativa dos vetores sem aplicar rotação. [Efemérides do Astropy](https://docs.astropy.org/en/stable/coordinates/solarsystem.html)
+
+Os valores são estimativas geométricas para o mesmo instante em TDB, sem correção de tempo de luz. A conversão UTC → TDB usa os segundos intercalares disponíveis localmente, inclusive na primeira chamada. O aviso `dubious year` do ERFA é esperado para datas futuras além do período coberto pelos dados de segundos intercalares e é suprimido durante a conversão.
 
 ```bash
 python -c 'from ephemerides import mars_geometry; print(mars_geometry("2025-01-16T12:00:00Z"))'

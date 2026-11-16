@@ -3,13 +3,53 @@
 from datetime import datetime, timezone
 from math import dist
 import re
+from threading import Lock
+from typing import Literal, TypeAlias, TypedDict
+import warnings
 
-from astropy import units as u
-from astropy.coordinates import get_body_barycentric
-from astropy.time import Time
+from astropy import units as u  # type: ignore[import-untyped]
+from astropy.coordinates import CartesianRepresentation, get_body_barycentric  # type: ignore[import-untyped]
+from astropy.time import Time  # type: ignore[import-untyped]
+from astropy.utils import iers  # type: ignore[import-untyped]
+from erfa import ErfaWarning  # type: ignore[import-untyped]
+
+
+Vector3D: TypeAlias = tuple[float, float, float]
+
+
+class Position(TypedDict):
+    x: float
+    y: float
+    z: float
+
+
+class Positions(TypedDict):
+    sun: Position
+    earth: Position
+    mars: Position
+
+
+class Distances(TypedDict):
+    mars_earth: float
+    mars_sun: float
+
+
+class Frame(TypedDict):
+    origin: Literal["sun"]
+    axes: Literal["ICRS"]
+
+
+class MarsGeometry(TypedDict):
+    instant_utc: str
+    length_unit: Literal["au"]
+    frame: Frame
+    model: Literal["astropy:builtin"]
+    positions: Positions
+    distances: Distances
 
 
 _EPHEMERIS = "builtin"
+_IERS_LOCK = Lock()
 _START_UTC = datetime(2000, 1, 1, tzinfo=timezone.utc)
 _END_UTC = datetime(2050, 1, 1, tzinfo=timezone.utc)
 _TIMESTAMP = re.compile(
@@ -39,29 +79,58 @@ def _parse_instant(instant: str) -> datetime:
     return utc
 
 
-def mars_geometry(instant: str) -> dict[str, object]:
-    """Return estimated heliocentric vectors and Mars distances in au."""
-    utc = _parse_instant(instant)
-    epoch = Time(utc, scale="utc").tdb
-    sun_barycentric = get_body_barycentric("sun", epoch, ephemeris=_EPHEMERIS)
+def _heliocentric_vector(
+    body: Literal["earth", "mars"], epoch: Time, sun_barycentric: CartesianRepresentation
+) -> Vector3D:
+    barycentric = get_body_barycentric(body, epoch, ephemeris=_EPHEMERIS)
+    x, y, z = (barycentric - sun_barycentric).xyz.to_value(u.au)
+    return (float(x), float(y), float(z))
 
-    heliocentric = {"sun": (0.0, 0.0, 0.0)}
-    for body in ("earth", "mars"):
-        barycentric = get_body_barycentric(body, epoch, ephemeris=_EPHEMERIS)
-        xyz = (barycentric - sun_barycentric).xyz.to_value(u.au)
-        heliocentric[body] = tuple(float(component) for component in xyz)
+
+def _position(vector: Vector3D) -> Position:
+    x, y, z = vector
+    return {"x": x, "y": y, "z": z}
+
+
+def mars_geometry(instant: str) -> MarsGeometry:
+    """Return estimated heliocentric vectors and Mars distances in au.
+
+    The metadata `axes: "ICRS"` names the nominal axes of `astropy:builtin`.
+    Astropy directly combines BCRS-oriented Sun and Earth vectors derived from
+    `erfa.epv00` with the heliocentric Mars vector from `erfa.plan94`, which
+    uses the mean equator and equinox of J2000.0. This gives approximate ICRS
+    alignment and preserves the native vector convention without a rotation.
+    """
+    utc = _parse_instant(instant)
+    # Astropy's IERS settings are process-global. Serialize this temporary
+    # configuration across calls, including the first leap-second table check.
+    with (
+        _IERS_LOCK,
+        iers.conf.set_temp("auto_download", False),
+        iers.conf.set_temp("auto_max_age", None),
+        warnings.catch_warnings(),
+    ):
+        # Future UTC years can exceed ERFA's leap-second knowledge.
+        warnings.filterwarnings("ignore", message=r".*dubious year.*", category=ErfaWarning)
+        epoch = Time(utc, scale="utc").tdb
+
+    sun_barycentric = get_body_barycentric("sun", epoch, ephemeris=_EPHEMERIS)
+    sun: Vector3D = (0.0, 0.0, 0.0)
+    earth = _heliocentric_vector("earth", epoch, sun_barycentric)
+    mars = _heliocentric_vector("mars", epoch, sun_barycentric)
 
     return {
         "instant_utc": utc.isoformat().replace("+00:00", "Z"),
         "length_unit": "au",
         "frame": {"origin": "sun", "axes": "ICRS"},
-        "model": f"astropy:{_EPHEMERIS}",
+        "model": "astropy:builtin",
         "positions": {
-            body: dict(zip(("x", "y", "z"), xyz))
-            for body, xyz in heliocentric.items()
+            "sun": _position(sun),
+            "earth": _position(earth),
+            "mars": _position(mars),
         },
         "distances": {
-            "mars_earth": dist(heliocentric["mars"], heliocentric["earth"]),
-            "mars_sun": dist(heliocentric["mars"], heliocentric["sun"]),
+            "mars_earth": dist(mars, earth),
+            "mars_sun": dist(mars, sun),
         },
     }
