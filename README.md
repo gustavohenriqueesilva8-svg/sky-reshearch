@@ -27,6 +27,19 @@ python app.py
 
 Abra [http://127.0.0.1:8002](http://127.0.0.1:8002). A [documentação da API](http://127.0.0.1:8002/docs) é servida pelo mesmo processo. Para abrir o [exemplo de Barnard diretamente](http://127.0.0.1:8002/?page=workbench&example=barnard), use `?page=workbench&example=barnard`. As consultas ao vivo exigem conexão com o IRSA ou o SkyView, conforme a fonte escolhida.
 
+### Geometria de Marte em Python
+
+`mars_geometry(instant)` aceita `YYYY-MM-DDTHH:MM:SS` com uma fração opcional de até seis dígitos e fuso explícito (`Z` ou `±HH:MM`). A faixa UTC vai de `2000-01-01T00:00:00Z` (inclusive) a `2050-01-01T00:00:00Z` (exclusive). Entradas inválidas, fora da faixa ou com segundo `60` geram `ValueError`.
+
+O dicionário retorna `instant_utc`, `length_unit` (`au`), `frame` (origem no centro do Sol e eixos paralelos ao ICRS) e `model` (`astropy:builtin`). `positions` contém os vetores geométricos `x, y, z` de `sun`, `earth` e `mars`. `distances` contém `mars_earth` e `mars_sun`, obtidas das diferenças entre os vetores 3D.
+
+Os valores são estimativas da efeméride embutida do Astropy/ERFA, calculadas no mesmo instante em TDB, sem correção de tempo de luz. Para datas futuras, a conversão de UTC para TDB usa os segundos intercalares conhecidos pelo Astropy. [Efemérides do Astropy](https://docs.astropy.org/en/stable/coordinates/solarsystem.html)
+
+```bash
+python -c 'from ephemerides import mars_geometry; print(mars_geometry("2025-01-16T12:00:00Z"))'
+python -m unittest tests_test_ephemerides.py
+```
+
 ## Comparador e processamento de dados
 
 - **Comparação guiada:** escolha uma data, alterne manualmente ou reproduza as imagens. A origem e as datas disponíveis aparecem em ambos os modos. A mistura dos quadros é uma ajuda visual; cada época tem só um quadro observado.
