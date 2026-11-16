@@ -1,21 +1,22 @@
-# Sky Researcher — o que mudou no céu?
+# Sky Researcher — encontre um astro e entenda onde ele está
 
-O Sky Researcher é o primeiro passo para um **GPS espacial de código aberto**: um mapa que ajuda a encontrar objetos, localizar as observações disponíveis e investigar o que mudou entre elas. Para o desafio [Planet X and SPHEREx](https://www.spaceappschallenge.org/2026/challenges/planet-x-and-spherex/) do NASA Space Apps, implementamos o primeiro caso de uso: comparar duas imagens da mesma região do céu e entender o que a comparação permite concluir.
-
-É para **curiosos e estudantes** que querem explorar imagens astronômicas sem saber coordenadas ou formatos de arquivo; **educadores** que querem demonstrar movimento próprio com observações reais; e **astrônomos amadores e participantes de ciência cidadã** que querem localizar uma fonte e decidir o que investigar em seguida.
+Encontre um objeto pelo nome ou identificador e descubra em que direção ele aparece no céu e a que distância aproximada está da Terra. O **GPS da Via Láctea** é a visão de uma ferramenta aberta de orientação astronômica. O comparador desenvolvido para o NASA Space Apps Challenge permite investigar observações do campo escolhido. [Planet X and SPHEREx](https://www.spaceappschallenge.org/2026/challenges/planet-x-and-spherex/)
 
 ## Experimente com a Estrela de Barnard
 
-1. Na página inicial, clique em **Comparar a Estrela de Barnard**.
-2. Alterne entre **10/07/1950** e **17/06/1991**. O círculo mostra a posição aproximada de Barnard. Use as estrelas vizinhas para perceber o que permanece no lugar.
-3. Em 1950, Barnard aparece na metade inferior do recorte. Em 1991, aparece mais ao norte, enquanto as vizinhas continuam em posições semelhantes. Isso é compatível com o [movimento próprio conhecido da estrela](https://simbad.cds.unistra.fr/simbad/sim-id?Ident=Barnard%27s+Star).
-4. Confira as placas e os links para os FITS originais no painel ao lado. Os recortes são **ópticos**, do Digitized Sky Survey (DSS), e estão incluídos no projeto. A atividade funciona sem acesso aos arquivos remotos. O brilho na tela não mede variação de brilho da estrela.
+1. Abra **Mapa Estelar**, digite **Barnard** e selecione **Estrela de Barnard** no catálogo. Também é possível pesquisar identificadores já cadastrados no nome, como **M42**.
+2. Na **Carta 2D**, veja a direção da estrela a partir da Terra. Passe para a **Vista 3D** para ver a mesma estrela selecionada e sua distância aproximada de 5,96 anos-luz. Os anéis da escala logarítmica representam 10, 100 e 1.000 anos-luz.
+3. Clique em **Observar este astro** para abrir a ação recomendada do alvo. No Modo de Observação, Barnard abre o exemplo com dois recortes ópticos incluídos, de 1950 e 1991. Alterne as datas para comparar sua posição aparente com a das vizinhas. Use **Consultar SPHEREx** para tentar uma comparação infravermelha ao vivo. [Proveniência dos recortes de Barnard](assets/README.md)
 
-Depois do exemplo, use **Consultar SPHEREx** para procurar observações no infravermelho, experimente **RW Aurigae** ou **R Draconis** para comparar a aparência de uma fonte ou escolha outro campo no **Mapa Estelar**. Se a consulta ao vivo não devolver um par utilizável, a interface explica o que faltou e deixa voltar ao exemplo.
+## O que funciona hoje
+
+A busca, o catálogo e as duas vistas funcionam com os dados locais. Os filtros do catálogo ajudam a encontrar alvos da Via Láctea e listam as galáxias externas em um grupo separado. A carta mostra a direção dos objetos dos dois grupos. A vista 3D representa uma amostra dos objetos da Via Láctea cadastrados em relação à Terra. Para **R Draconis**, a carta indica a direção e a vista 3D explica que falta uma distância para posicioná-la.
+
+Ações no mapa como pesquisar, selecionar ou trocar de vista são locais. O botão de observação encaminha o alvo para o comparador ou o espectro, conforme a ação disponível. As consultas aos arquivos remotos dependem da cobertura e da disponibilidade da fonte.
 
 ## Como executar
 
-Para fazer só a atividade de Barnard, abra `index.html` no navegador mantendo a pasta `assets/` no mesmo diretório. Para habilitar as consultas aos arquivos e o laboratório, use Python 3.10+:
+Para usar o mapa e a atividade de Barnard com os dados locais, abra `index.html` no navegador mantendo a pasta `assets/` no mesmo diretório. Para habilitar as consultas aos arquivos e o laboratório, use Python 3.10+:
 
 ```bash
 python -m venv .venv
@@ -26,11 +27,10 @@ python app.py
 
 Abra [http://127.0.0.1:8002](http://127.0.0.1:8002). A [documentação da API](http://127.0.0.1:8002/docs) é servida pelo mesmo processo. Para abrir o [exemplo de Barnard diretamente](http://127.0.0.1:8002/?page=workbench&example=barnard), use `?page=workbench&example=barnard`. As consultas ao vivo exigem conexão com o IRSA ou o SkyView, conforme a fonte escolhida.
 
-## Como funciona
+## Comparador e processamento de dados
 
 - **Comparação guiada:** escolha uma data, alterne manualmente ou reproduza as imagens. A origem e as datas disponíveis aparecem em ambos os modos. A mistura dos quadros é uma ajuda visual; cada época tem só um quadro observado.
 - **Modo de Pesquisa:** altera coordenadas RA/Dec, raio do campo, detectores, canais, filtro e cadência. Expõe metadados FITS e WCS, seleção de fonte, subtração e soma exploratória. O visor permite salvar uma imagem ou exportar a alternância em WebM quando o navegador oferece suporte.
-- **Mapa Estelar:** permite escolher objetos no catálogo ou indicar um ponto da carta equatorial. A vista 3D mostra direções e distâncias aproximadas a partir da Terra; não posiciona objetos sem distância cadastrada.
 - **Laboratório espectral:** inspeciona canais individuais ou a média por detector do SPHEREx DR1. O Quick-Look extrai um espectro de uma abertura de 3 × 3 pixels e permite exportar ou editar os dados em CSV. WISE, 2MASS, IRAS, IRIS e AKARI via SkyView oferecem contexto de outras faixas, não épocas SPHEREx.
 
 ### Pipeline de dados
@@ -51,12 +51,12 @@ As principais rotas são `/api/spherex/blink` (par SPHEREx), `/api/motion_video`
 - A cobertura, a disponibilidade e as datas variam por campo. O SPHEREx temporal limita o raio a 30′; um par utilizável pode não existir no detector escolhido. Uma data ausente é apresentada como não informada. Consultas malsucedidas não geram imagens nem espectros substitutos sintéticos.
 - O Quick-Look é uma estimativa exploratória de brilho superficial em MJy/sr, sem fotometria PSF nem incerteza formal. A soma temporal não é ponderada pela variância; a subtração trabalha com quadros normalizados. O filtro de mediana pode atenuar fontes compactas.
 
-## Roadmap para o GPS espacial
+## Roadmap do GPS da Via Láctea
 
-1. **Navegação por coordenadas e datas.** Unificar o mapa, o catálogo e as camadas de cobertura por levantamento. Procurar por nome, coordenada ou região; salvar a posição e os parâmetros da investigação em um link.
+1. **Navegação por coordenadas e datas.** Adicionar busca por coordenadas e regiões, camadas de cobertura por levantamento e links para compartilhar parâmetros de investigação.
 2. **Investigações reproduzíveis.** Guardar observações e candidatos com IDs, datas, bandas, recortes e parâmetros de alinhamento. Permitir anotações e compartilhamento sem depender de um único arquivo remoto.
 3. **Comparação quantitativa.** Acrescentar séries com várias épocas, incertezas, fotometria e astrometria calibradas. Apoiar validação cruzada de candidatos e distinguir artefatos, estrelas variáveis e objetos móveis.
-4. **Navegação no espaço.** Integrar catálogos de distância e efemérides com época, referencial e incerteza explícitos, incluindo previsões de posição. A visão é orientar a exploração de dados celestes; esta versão não fornece posicionamento de uma nave.
+4. **Acompanhamento de objetos.** Integrar catálogos de distância e efemérides para estimar posições em outras datas, com referencial e incerteza explícitos.
 
 ## Fontes, créditos e licença
 
@@ -65,4 +65,4 @@ As principais rotas são `/api/spherex/blink` (par SPHEREx), `/api/motion_video`
 - **Assistência de IA:** OpenAI Codex e Google Gemini auxiliaram no desenvolvimento, na depuração e na documentação. Visual Studio Code foi usado como editor. As imagens e os espectros observacionais vêm dos arquivos identificados no aplicativo.
 - O código é [MIT](LICENSE). Os recortes e produtos de dados de terceiros mantêm as respectivas licenças.
 
-**English quick start:** Open `index.html` with the `assets` folder beside it and choose **Comparar a Estrela de Barnard**. Toggle the 1950 and 1991 optical plates to see Barnard's apparent position shift north relative to neighboring stars. Each frame links to its original FITS cutout. Run `python app.py` after installing the requirements to query SPHEREx and other archives.
+**English quick start:** Open `index.html` with the `assets` folder beside it and open **Mapa Estelar**, search for **Barnard**, and switch between the sky chart and the 3D view. Select **Observar este astro** to open the archived comparison. Toggle the 1950 and 1991 optical plates to see Barnard's apparent position shift north relative to neighboring stars. Each frame links to its original FITS cutout. Run `python app.py` after installing the requirements to query SPHEREx and other archives.
