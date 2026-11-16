@@ -43,7 +43,6 @@ class ApiTests(unittest.TestCase):
 
     def fake_skyview(self, position=None, survey=None, radius=None, pixels=None, cache=True):
         self.assertFalse(cache)
-        self.assertEqual(pixels, 500)
         return [synthetic_hdu(survey[0])]
 
     def assert_png(self, content):
@@ -56,6 +55,15 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(image.format, "PNG")
         self.assertGreater(image.width, 0)
         self.assertGreater(image.height, 0)
+
+    def test_application_serves_the_two_archive_frames(self):
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Comparar a Estrela de Barnard", page.text)
+        for name in ("barnard-1950.png", "barnard-1991.png"):
+            frame = self.client.get(f"/assets/{name}")
+            self.assertEqual(frame.status_code, 200)
+            self.assert_png_image(frame.content)
 
     def test_catalog_endpoint_returns_challenge_and_famous_targets(self):
         response = self.client.get("/api/catalog")
@@ -101,6 +109,17 @@ class ApiTests(unittest.TestCase):
         gif = Image.open(io.BytesIO(base64.b64decode(payload["gif_data"].split(",", 1)[1])))
         self.assertEqual(gif.format, "GIF")
         self.assertGreaterEqual(getattr(gif, "n_frames", 1), 4)
+
+    @patch.object(app.SkyView, "get_images")
+    def test_temporal_frames_can_be_requested_without_gif(self, mocked):
+        mocked.side_effect = self.fake_skyview
+        response = self.client.get("/api/motion_video", params={
+            "ra": "10", "dec": "20", "source": "optical", "include_gif": "false"
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(len(payload["images"]), 2)
+        self.assertNotIn("gif_data", payload)
 
     @patch.object(app.SkyView, "get_images")
     @patch.object(app, "fetch_spherex_temporal_pair", new_callable=AsyncMock)
@@ -233,13 +252,19 @@ class ApiTests(unittest.TestCase):
 
     def test_spherex_metadata_aliases_are_translated(self):
         metadata = app.extract_safe_fits_metadata(
-            {"DETECTOR": "4", "OBSID": "obs-123", "EXPIDN": 987, "DATE": "2025-06-12T03:31:58"},
+            {"DETECTOR": "4", "OBSID": "obs-123", "EXPIDN": 987, "DATE_OBS": "2025-06-12T03:31:58"},
             "SPHEREx simulated",
         )
         self.assertEqual(metadata["telescope"], "SPHEREx")
         self.assertEqual(metadata["instrument"], "4")
         self.assertEqual(metadata["date_observed"], "2025-06-12T03:31:58")
         self.assertEqual(metadata["observation_id"], "obs-123")
+
+    def test_observation_date_does_not_use_fits_file_creation_date(self):
+        header = {"DATE": "2026-11-15"}
+        self.assertEqual(app.extract_safe_fits_metadata(header, "DSS1")["date_observed"], "N/A")
+        header["MJD-OBS"] = 51544.0
+        self.assertEqual(app.extract_safe_fits_metadata(header, "DSS1")["date_observed"], "2000-01-01T00:00:00.000")
 
     def test_spherex_flag_definitions_support_mskn_and_legacy_mp_keywords(self):
         header = fits.Header()
@@ -261,7 +286,8 @@ class ApiTests(unittest.TestCase):
         result = app._spherex_results(app.SkyCoord(10, 20, unit="deg"), "spherex_dr1_cube", 0.1)
         self.assertEqual(len(result), 1)
         self.assertEqual(mocked_service.return_value.search.call_count, 2)
-        mocked_sleep.assert_called_once_with(1.0)
+        mocked_sleep.assert_called_once()
+        self.assertGreater(mocked_sleep.call_args.args[0], 0)
 
     def make_spherex_cube(self, path):
         wcs = WCS(naxis=2)

@@ -4,6 +4,7 @@ import concurrent.futures
 from contextlib import contextmanager
 import io
 import logging
+from pathlib import Path
 import time
 from typing import Any, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -13,6 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+import requests
 from astropy import units as u
 from astropy.coordinates import ICRS, SkyCoord
 from astropy.io import fits
@@ -25,12 +27,28 @@ from astroquery.skyview import SkyView
 import pyvo as vo
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from scipy.ndimage import median_filter
 
 logger = logging.getLogger(__name__)
 conf.remote_timeout = 120
+
+
+def _bound_http_session(session, connect_timeout: float = 3, read_timeout: float = 8):
+    """Cap blocking PyVO/Astroquery HTTP calls so failover can start promptly."""
+    original_request = session.request
+
+    def bounded_request(method, url, **kwargs):
+        kwargs.setdefault("timeout", (connect_timeout, read_timeout))
+        return original_request(method, url, **kwargs)
+
+    session.request = bounded_request
+    return session
+
+
+_bound_http_session(SkyView._session)
 NO_CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
@@ -49,6 +67,14 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+PROJECT_DIR = Path(__file__).resolve().parent
+app.mount("/assets", StaticFiles(directory=PROJECT_DIR / "assets"), name="assets")
+
+
+@app.get("/", include_in_schema=False)
+async def get_application():
+    return FileResponse(PROJECT_DIR / "index.html", media_type="text/html")
 
 
 @app.middleware("http")
@@ -227,20 +253,30 @@ def extract_safe_fits_metadata(header, survey_name: str) -> dict:
                 return value
         return default
 
+    observation_date = first("DATE-OBS", "DATE_OBS")
+    if not observation_date:
+        mjd = first("MJD-OBS", "MJD_OBS")
+        if mjd is not None:
+            try:
+                observation_date = Time(float(mjd), format="mjd", scale="utc").isot
+            except (TypeError, ValueError):
+                pass
+
     is_spherex = any(key in header for key in ("DETECTOR", "OBSID", "EXPIDN"))
     fields = {
         "survey_origin": survey_name,
         "telescope": first("TELESCOP", "TELESCOPE", default="SPHEREx" if is_spherex else "Desconhecido"),
         "instrument": first("INSTRUME", "INSTRUMENT", "DETECTOR", default="Desconhecido"),
         "exposure_time_sec": first("EXPTIME", "EXPOSURE", "TELAPSE", default=0.0),
-        "date_observed": first("DATE-OBS", "DATE_OBS", "DATE", "MJD-OBS", default="N/A"),
+        # FITS DATE is file creation, not the date the sky was observed.
+        "date_observed": observation_date or "N/A",
         "wcs_reference_pixel": [first("CRPIX1"), first("CRPIX2")],
         "wcs_reference_ra_dec": [first("CRVAL1", "RA_REF"), first("CRVAL2", "DEC_REF")],
         "pixel_scale": first("CDELT1", "CD1_1", "PIXSCAL1", default="N/A"),
         "wcs_projection": [first("CTYPE1", default="N/A"), first("CTYPE2", default="N/A")],
         "photometric_zero_point": first("MAGZPT", "MAGZERO", "ZP"),
         "bunit": header.get("BUNIT", "N/A"),
-        "observation_id": first("OBSID", "EXPIDN"),
+        "observation_id": first("OBSID", "EXPIDN", "PLATEID"),
         "data_source": first("SPHRSRC", default=survey_name),
     }
     return sanitize_json(fields)
@@ -346,13 +382,13 @@ def _image_from_result(result, survey: str):
     return hdu
 
 
-async def fetch_survey(position: SkyCoord, radius: u.Quantity, survey: str):
+async def fetch_survey(position: SkyCoord, radius: u.Quantity, survey: str, pixels: int = 500):
     result = await asyncio.to_thread(
         SkyView.get_images,
         position=position,
         survey=[survey],
         radius=radius,
-        pixels=500,
+        pixels=pixels,
         cache=False,
     )
     return _image_from_result(result, survey)
@@ -375,21 +411,25 @@ def _record_value(record, name, default=None):
 
 def _spherex_results(position: SkyCoord, collection: str, radius_deg: float, maxrec: int = 1000):
     retryable_messages = ("502 Server Error", "503 Server Error", "504 Server Error", "Proxy Error", "Bad Gateway")
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            service = vo.dal.SIA2Service(SPHEREX_SIA_URL, check_baseurl=False)
-            return service.search(
-                pos=(position.ra.deg, position.dec.deg, radius_deg),
-                collection=collection,
-                maxrec=maxrec,
-            )
+            session = _bound_http_session(requests.Session())
+            try:
+                service = vo.dal.SIA2Service(SPHEREX_SIA_URL, check_baseurl=False, session=session)
+                return service.search(
+                    pos=(position.ra.deg, position.dec.deg, radius_deg),
+                    collection=collection,
+                    maxrec=maxrec,
+                )
+            finally:
+                session.close()
         except Exception as exc:
-            if attempt == 2 or not any(token in str(exc) for token in retryable_messages):
+            if attempt == 1 or not any(token in str(exc) for token in retryable_messages):
                 raise
-            delay_seconds = 1.0 * (2 ** attempt)
+            delay_seconds = 0.5
             logger.warning(
-                "IRSA SIA retornou falha transitória (%s); nova tentativa em %ss (%s/3).",
-                exc, delay_seconds, attempt + 2,
+                "IRSA SIA retornou falha transitória (%s); uma nova tentativa ocorrerá em %ss.",
+                exc, delay_seconds,
             )
             time.sleep(delay_seconds)
 
@@ -513,14 +553,11 @@ def _read_remote_cube_cutout(access_url: str, position: SkyCoord, fov: u.Quantit
 
 
 async def fetch_spherex_cutout(position: SkyCoord, fov: u.Quantity, band: int, mode: str = "channel"):
-    """Try the DR1 SIA index, then the public AWS mirror; read only the requested planes."""
-    def _sync_fetch():
-        results = []
-        try:
-            results = _spherex_results(position, "spherex_dr1_cube", fov.to_value(u.deg), maxrec=20)
-        except Exception as exc:
-            logger.warning("SIA2 indisponível para o cubo SPHEREx; tentando o espelho AWS: %s", exc)
+    """Race IRSA SIA2 against the public AWS mirror and return the first image."""
+    radius_deg = fov.to_value(u.deg)
 
+    def fetch_sia():
+        results = _spherex_results(position, "spherex_dr1_cube", radius_deg, maxrec=20)
         last_error = None
         for record in results:
             access_url = _record_value(record, "access_url")
@@ -536,35 +573,43 @@ async def fetch_spherex_cutout(position: SkyCoord, fov: u.Quantity, band: int, m
                 continue
             except Exception as exc:
                 last_error = exc
-                logger.warning("Não foi possível ler o tile SPHEREx %s: %s", access_url, exc)
+                logger.warning("Não foi possível ler o tile SPHEREx do IRSA %s: %s", access_url, exc)
+        if last_error:
+            raise RuntimeError(f"Os tiles SPHEREx do IRSA não puderam ser lidos: {last_error}") from last_error
+        raise LookupError("O índice SIA2 não encontrou um tile SPHEREx com cobertura para esta coordenada.")
 
-        try:
-            s3_url = _spherex_s3_cube_url(position)
-            hdu, quality, wavelengths = _read_remote_cube_cutout(
-                s3_url, position, fov, mode=mode, value=band
-            )
-            hdu.header["SPHRSRC"] = "AWS Open Data S3"
-            return hdu, quality, wavelengths
-        except LookupError as s3_lookup:
-            if last_error:
-                raise RuntimeError(
-                    "Os tiles SIA2 retornados falharam na leitura e o tile correspondente no espelho AWS "
-                    f"não cobriu a coordenada ({s3_lookup})."
-                ) from last_error
-            raise LookupError("Nem o índice SIA2 nem o cubo SPHEREx DR1 no espelho AWS cobrem esta coordenada.")
-        except Exception as s3_error:
-            if _is_remote_not_found(s3_error) and not last_error:
-                raise LookupError("O espelho AWS não contém um tile SPHEREx DR1 com cobertura para esta coordenada.") from s3_error
-            if last_error:
-                raise RuntimeError(
-                    "Falharam a leitura SIA2 e o acesso direto ao cubo DR1 no espelho AWS "
-                    f"(SIA2: {type(last_error).__name__}; AWS: {type(s3_error).__name__}: {s3_error})."
-                ) from s3_error
-            raise RuntimeError(
-                f"Falha ao ler o cubo DR1 no espelho AWS ({type(s3_error).__name__}: {s3_error})."
-            ) from s3_error
+    def fetch_aws():
+        hdu, quality, wavelengths = _read_remote_cube_cutout(
+            _spherex_s3_cube_url(position), position, fov, mode=mode, value=band
+        )
+        hdu.header["SPHRSRC"] = "AWS Open Data S3"
+        return hdu, quality, wavelengths
 
-    return await asyncio.to_thread(_sync_fetch)
+    tasks = {
+        asyncio.create_task(asyncio.to_thread(fetch_sia)),
+        asyncio.create_task(asyncio.to_thread(fetch_aws)),
+    }
+    failures = []
+    try:
+        while tasks:
+            done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                try:
+                    result = task.result()
+                except Exception as exc:
+                    failures.append(exc)
+                    continue
+                for pending in tasks:
+                    pending.cancel()
+                return result
+    finally:
+        for pending in tasks:
+            pending.cancel()
+
+    if failures and all(isinstance(exc, LookupError) for exc in failures):
+        raise LookupError("Nem o índice SIA2 nem o cubo SPHEREx DR1 no espelho AWS cobrem esta coordenada.")
+    details = "; ".join(f"{type(exc).__name__}: {exc}" for exc in failures)
+    raise RuntimeError(f"Falharam as consultas paralelas ao IRSA SIA2 e ao espelho AWS ({details}).")
 
 
 def _read_remote_cube_spectrum(access_url: str, position: SkyCoord):
@@ -603,13 +648,9 @@ def _read_remote_cube_spectrum(access_url: str, position: SkyCoord):
 
 
 async def fetch_spherex_cube_spectrum(position: SkyCoord):
-    def _sync_fetch():
-        results = []
-        try:
-            results = _spherex_results(position, "spherex_dr1_cube", 1 / 60, maxrec=20)
-        except Exception as exc:
-            logger.warning("SIA2 indisponível para extração espectral; tentando o espelho AWS: %s", exc)
-
+    """Race the IRSA index and AWS mirror for a real DR1 quick-look spectrum."""
+    def fetch_sia():
+        results = _spherex_results(position, "spherex_dr1_cube", 1 / 60, maxrec=20)
         last_error = None
         for record in results:
             access_url = _record_value(record, "access_url")
@@ -623,36 +664,41 @@ async def fetch_spherex_cube_spectrum(position: SkyCoord):
                 continue
             except Exception as exc:
                 last_error = exc
-                logger.warning("Não foi possível extrair o espectro do tile %s: %s", access_url, exc)
+                logger.warning("Não foi possível extrair o espectro do tile SPHEREx %s: %s", access_url, exc)
+        if last_error:
+            raise RuntimeError(f"O tile SPHEREx do IRSA não pôde ser lido: {last_error}") from last_error
+        raise LookupError("O índice SIA2 não encontrou um tile para extração espectral nesta coordenada.")
 
-        try:
-            wavelengths, flux, quality = _read_remote_cube_spectrum(
-                _spherex_s3_cube_url(position), position
-            )
-            quality["data_source"] = "AWS Open Data S3"
-            return wavelengths, flux, quality
-        except LookupError as s3_lookup:
-            if last_error:
-                raise RuntimeError(
-                    "Os tiles SIA2 retornados falharam na leitura e o tile correspondente no espelho AWS "
-                    f"não cobriu a coordenada ({s3_lookup})."
-                ) from last_error
-            raise LookupError(
-                "Nem o índice SIA2 nem o cubo SPHEREx DR1 no espelho AWS cobrem esta coordenada."
-            )
-        except Exception as s3_error:
-            if _is_remote_not_found(s3_error) and not last_error:
-                raise LookupError("O espelho AWS não contém um tile SPHEREx DR1 com cobertura para esta coordenada.") from s3_error
-            if last_error:
-                raise RuntimeError(
-                    "Falharam a extração SIA2 e o acesso direto ao cubo DR1 no espelho AWS "
-                    f"(SIA2: {type(last_error).__name__}; AWS: {type(s3_error).__name__}: {s3_error})."
-                ) from s3_error
-            raise RuntimeError(
-                f"Falha ao extrair o cubo DR1 do espelho AWS ({type(s3_error).__name__}: {s3_error})."
-            ) from s3_error
+    def fetch_aws():
+        wavelengths, flux, quality = _read_remote_cube_spectrum(_spherex_s3_cube_url(position), position)
+        quality["data_source"] = "AWS Open Data S3"
+        return wavelengths, flux, quality
 
-    return await asyncio.to_thread(_sync_fetch)
+    tasks = {
+        asyncio.create_task(asyncio.to_thread(fetch_sia)),
+        asyncio.create_task(asyncio.to_thread(fetch_aws)),
+    }
+    failures = []
+    try:
+        while tasks:
+            done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                try:
+                    result = task.result()
+                except Exception as exc:
+                    failures.append(exc)
+                    continue
+                for pending in tasks:
+                    pending.cancel()
+                return result
+    finally:
+        for pending in tasks:
+            pending.cancel()
+
+    if failures and all(isinstance(exc, LookupError) for exc in failures):
+        raise LookupError("Nem o índice SIA2 nem o cubo SPHEREx DR1 no espelho AWS cobrem esta coordenada.")
+    details = "; ".join(f"{type(exc).__name__}: {exc}" for exc in failures)
+    raise RuntimeError(f"Falharam as consultas espectrais paralelas ao IRSA e ao espelho AWS ({details}).")
 
 
 def _spherex_s3_cube_url(position: SkyCoord) -> str:
@@ -756,7 +802,7 @@ def _read_spherex_exposure(record, position: SkyCoord, fov: u.Quantity):
         primary_header.update(cutout.wcs.to_header(relax=True))
         hdu = fits.PrimaryHDU(data=image, header=primary_header)
 
-    when = Time(exposure_time, format="mjd").isot
+    when = Time(exposure_time, format="mjd", scale="utc").isot
     metadata = extract_safe_fits_metadata(hdu.header, collection)
     metadata["observation_id"] = (
         metadata.get("observation_id")
@@ -764,7 +810,7 @@ def _read_spherex_exposure(record, position: SkyCoord, fov: u.Quantity):
         or _record_value(record, "obs_publisher_did", "N/A")
     )
     metadata.update({
-        "date_observed": when if metadata.get("date_observed") in (None, "N/A") else metadata["date_observed"],
+        "date_observed": when,
         "wavelength_um": wavelength_um,
         "bandwidth_um": bandwidth_um,
         "detector_bandpass": _record_value(record, "energy_bandpassname", "N/A"),
@@ -861,10 +907,9 @@ async def fetch_spherex_temporal_pair(position: SkyCoord, fov: u.Quantity, detec
             hdu2, metadata2 = loaded_observations[url2]
             delta_wavelength = abs(metadata1["wavelength_um"] - metadata2["wavelength_um"])
             tolerance = max(metadata1["bandwidth_um"], metadata2["bandwidth_um"]) * 0.5
-            metadata1["wavelength_match_tolerance_um"] = tolerance
-            metadata2["wavelength_match_tolerance_um"] = tolerance
-            metadata1["wavelength_delta_um"] = delta_wavelength
-            metadata2["wavelength_delta_um"] = delta_wavelength
+            comparison = {"wavelength_match_tolerance_um": tolerance, "wavelength_delta_um": delta_wavelength}
+            # Uma exposição aparece em vários pares; registre o resultado do par sem alterar a exposição em cache.
+            pair = (hdu1, {**metadata1, **comparison}), (hdu2, {**metadata2, **comparison})
             if delta_wavelength > tolerance:
                 wavelength_failures.append("As exposições disponíveis não têm comprimentos de onda compatíveis no alvo.")
                 # Só aceita fallback espectral próximo quando os metadados são de observações reais.
@@ -872,9 +917,9 @@ async def fetch_spherex_temporal_pair(position: SkyCoord, fov: u.Quantity, detec
                         and "observation_mjd" in metadata1
                         and "observation_mjd" in metadata2
                         and delta_wavelength < best_delta):
-                    best_pair, best_delta = ((hdu1, metadata1), (hdu2, metadata2)), delta_wavelength
+                    best_pair, best_delta = pair, delta_wavelength
                 continue
-            return (hdu1, metadata1), (hdu2, metadata2)
+            return pair
         if best_pair is not None:
             return best_pair
         # An observed spectral mismatch or a cutout outside the image footprint
@@ -1096,7 +1141,9 @@ async def get_infrared_image(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
-        hdu = await fetch_survey(coord, fov * u.deg, selected_survey)
+        # IR surveys are often much coarser than the DSS grid. A 384px cutout
+        # avoids paying for oversampling while remaining crisp in the viewer.
+        hdu = await fetch_survey(coord, fov * u.deg, selected_survey, pixels=384)
         matrix = np.asarray(hdu.data, dtype=np.float32)
         finite = matrix[np.isfinite(matrix)]
         if finite.size == 0:
@@ -1294,6 +1341,7 @@ async def get_motion_video(
     source: str = Query("auto", pattern="^(auto|spherex|optical)$"),
     detector: int = Query(2, ge=1, le=6),
     apply_filter: bool = Query(True, alias="filter"),
+    include_gif: bool = Query(True, description="Inclui o GIF além dos dois quadros PNG."),
 ):
     """Renderiza um blink animado; diferenças de imagem não são interpretadas como movimento próprio."""
     try:
@@ -1352,30 +1400,29 @@ async def get_motion_video(
             second = apply_median_filter(second)
             first[~valid], second[~valid] = np.nan, np.nan
 
-        valid_values = np.concatenate((first[valid], second[valid]))
-        valid_values = valid_values[np.isfinite(valid_values)]
-        if valid_values.size < 4:
-            raise LookupError("Não há pixels válidos suficientes para renderizar as duas épocas.")
+        # Mostre apenas a cobertura comum, para uma borda de recorte não parecer uma alteração no céu.
+        first, second = np.where(valid, first, np.nan), np.where(valid, second, np.nan)
 
         # Normalização robusta e independente por época, apenas para visualização.
         first_norm = _normalize(first, float(np.median(first[valid])), float(np.std(first[valid])))
         second_norm = _normalize(second, float(np.median(second[valid])), float(np.std(second[valid])))
         first_png = matrix_to_png_bytes_scaled(first_norm, cmap, -2.5, 6.0)
         second_png = matrix_to_png_bytes_scaled(second_norm, cmap, -2.5, 6.0)
-        gif = _crossfade_gif(first_png, second_png)
         first_b64 = base64.b64encode(first_png).decode("ascii")
         second_b64 = base64.b64encode(second_png).decode("ascii")
-        gif_b64 = base64.b64encode(gif).decode("ascii")
-        return JSONResponse({
+        result = {
             "source": selected_source,
             "comparison_type": "epoch_crossfade",
             "normalization": "normalização mediana/desvio padrão independente por época; visualização qualitativa",
             "fallback_reason": fallback_reason,
             "coordinates": {"ra_deg": float(coord.ra.deg), "dec_deg": float(coord.dec.deg), "fov_arcmin": used_fov},
             "images": [f"data:image/png;base64,{first_b64}", f"data:image/png;base64,{second_b64}"],
-            "gif_data": f"data:image/gif;base64,{gif_b64}",
             "metadata": [metadata1, metadata2],
-        }, headers=NO_CACHE_HEADERS)
+        }
+        if include_gif:
+            gif_b64 = base64.b64encode(_crossfade_gif(first_png, second_png)).decode("ascii")
+            result["gif_data"] = f"data:image/gif;base64,{gif_b64}"
+        return JSONResponse(result, headers=NO_CACHE_HEADERS)
     except HTTPException:
         raise
     except LookupError as exc:
@@ -1405,7 +1452,8 @@ async def get_spherex_blink(
             first[~valid], second[~valid] = np.nan, np.nan
         for metadata in (metadata1, metadata2):
             metadata["projection"] = [header.get("CTYPE1", "N/A"), header.get("CTYPE2", "N/A")]
-        finite_values = np.concatenate((first[np.isfinite(first)], second[np.isfinite(second)]))
+        finite_values = np.concatenate((first[valid], second[valid]))
+        first, second = np.where(valid, first, np.nan), np.where(valid, second, np.nan)
         vmin, vmax = np.percentile(finite_values, [1, 99])
         if vmax <= vmin:
             vmax = vmin + 1.0
@@ -1415,6 +1463,7 @@ async def get_spherex_blink(
             "metadata": [metadata1, metadata2],
             "images": [f"data:image/png;base64,{first_image}", f"data:image/png;base64,{second_image}"],
             "detector": detector,
+            "coordinates": {"ra_deg": float(coord.ra.deg), "dec_deg": float(coord.dec.deg), "fov_arcmin": fov},
         })
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
