@@ -34,7 +34,8 @@ def _probe_leap_second_update(mode: Literal["control", "protected"]) -> None:
         (get_cache_dir(), "XDG_CACHE_HOME"),
         (get_config_dir(), "XDG_CONFIG_HOME"),
     ):
-        if Path(directory) != (Path(os.environ[variable]) / "astropy").resolve():
+        expected = Path(os.environ[variable]) / "astropy"
+        if Path(directory).resolve() != expected.resolve():
             raise AssertionError(f"Astropy did not use the isolated {variable}")
 
     # Read local expirations without converting UTC, then move Astropy's
