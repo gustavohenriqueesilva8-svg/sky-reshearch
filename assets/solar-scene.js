@@ -22,6 +22,7 @@
     camera.position.copy(overview);
 
     const controls = new THREE.OrbitControls(camera, canvas);
+    controls.enabled = false;
     controls.enablePan = false;
     controls.enableZoom = false;
     controls.maxDistance = 14;
@@ -55,6 +56,7 @@
     const textures = new THREE.TextureLoader();
     const missingTextures = new Set();
     let trackedBody = null;
+    let freeReference = overview.length();
     let contextAvailable = true;
 
     const cameraUp = new THREE.Vector3();
@@ -71,12 +73,23 @@
       return meshes[trackedBody ?? "sun"].scale.x;
     }
 
+    function nearestSurface() {
+      let clearance = Infinity;
+      for (const mesh of Object.values(meshes)) {
+        if (mesh.visible) {
+          clearance = Math.min(clearance, camera.position.distanceTo(mesh.position) - mesh.scale.x);
+        }
+      }
+      return clearance;
+    }
+
     function draw() {
       if (!contextAvailable || !stage.clientWidth || !stage.clientHeight) return;
-      const clearance = camera.position.distanceTo(controls.target) - targetRadius();
-      const near = Math.min(0.02, Math.max(1e-9, clearance / 4));
-      if (camera.near !== near) {
+      const near = Math.min(0.02, Math.max(1e-9, nearestSurface() / 4));
+      const far = Math.max(30, camera.position.length() + 5);
+      if (camera.near !== near || camera.far !== far) {
         camera.near = near;
+        camera.far = far;
         camera.updateProjectionMatrix();
       }
       renderer.render(scene, camera);
@@ -84,7 +97,15 @@
       for (const [key, tip] of axes) placeLabel(labels[key], tip);
       for (const [key, mesh] of Object.entries(meshes)) {
         if (mesh.visible) {
-          placeLabel(labels[key], mesh.position.clone().addScaledVector(cameraUp, mesh.scale.x));
+          const radius = mesh.scale.x;
+          const depth = -mesh.position.clone().applyMatrix4(camera.matrixWorldInverse).z;
+          const diameterPx = radius * stage.clientHeight * camera.projectionMatrix.elements[5] / depth;
+          const subpixel = depth > 0 && diameterPx < 1;
+          const label = labels[key];
+          label.toggleAttribute("data-subpixel", subpixel);
+          if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a um pixel.");
+          else label.removeAttribute("aria-description");
+          placeLabel(label, mesh.position.clone().addScaledVector(cameraUp, radius));
         }
       }
     }
@@ -144,27 +165,102 @@
       draw();
     }
 
-    function changeOffset(offset) {
-      camera.position.copy(controls.target).add(offset);
+    function updateCamera() {
       if (!controls.update()) draw();
     }
 
+    function changeOffset(offset) {
+      camera.position.copy(controls.target).add(offset);
+      updateCamera();
+    }
+
+    function limitMovement(delta) {
+      const travel = delta.length();
+      if (travel === 0) return delta;
+      const direction = delta.clone().divideScalar(travel);
+      let allowed = travel;
+      // Find the first intersection of the camera's travel segment with a body.
+      for (const mesh of Object.values(meshes)) {
+        if (!mesh.visible) continue;
+        const fromCenter = camera.position.clone().sub(mesh.position);
+        const along = fromCenter.dot(direction);
+        if (along >= 0) continue;
+        const safeRadius = mesh.scale.x * (1 + MIN_CLEARANCE_RADII);
+        const outside = fromCenter.lengthSq() - safeRadius ** 2;
+        const discriminant = along ** 2 - outside;
+        if (discriminant > 0) {
+          allowed = Math.min(allowed, Math.max(0, -along - Math.sqrt(discriminant)));
+        }
+      }
+      return delta.multiplyScalar(allowed / travel);
+    }
+
+    function moveFree(delta) {
+      const movement = limitMovement(delta);
+      camera.position.add(movement);
+      controls.target.add(movement);
+      updateCamera();
+      return movement.length();
+    }
+
+    function freeMotionScale() {
+      return Math.max(1e-9, Math.min(freeReference, nearestSurface()));
+    }
+
+    function turnFree(yaw, pitch) {
+      const direction = controls.target.clone().sub(camera.position);
+      const angle = new THREE.Spherical().setFromVector3(direction);
+      angle.theta -= yaw;
+      angle.phi += pitch;
+      controls.target.copy(camera.position).add(direction.setFromSpherical(angle.makeSafe()));
+      updateCamera();
+    }
+
+    function panFree(x, y) {
+      const scale = 2 * freeMotionScale() / Math.max(1, canvas.clientHeight);
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+      moveFree(right.multiplyScalar(-x * scale).addScaledVector(up, y * scale));
+    }
+
+    function keepFreeCameraOutside() {
+      for (const mesh of Object.values(meshes)) {
+        if (!mesh.visible) continue;
+        const offset = camera.position.clone().sub(mesh.position);
+        const safeRadius = mesh.scale.x * (1 + MIN_CLEARANCE_RADII);
+        if (offset.length() >= safeRadius) continue;
+        const outward = offset.lengthSq() > 0 ? offset.clone() : camera.position.clone().sub(controls.target);
+        const correction = outward.setLength(safeRadius).sub(offset);
+        camera.position.add(correction);
+        controls.target.add(correction);
+      }
+    }
+
     function zoom(logStep) {
+      const factor = Math.exp(Math.max(-0.75, Math.min(0.75, logStep)));
+      if (!trackedBody) {
+        const step = freeMotionScale() * (1 - factor);
+        const forward = controls.target.clone().sub(camera.position).normalize();
+        const moved = moveFree(forward.multiplyScalar(step));
+        freeReference = Math.max(1e-9, Math.min(14, freeReference - Math.sign(step) * moved));
+        return;
+      }
       const offset = camera.position.clone().sub(controls.target);
       const radius = targetRadius();
-      const factor = Math.exp(Math.max(-0.75, Math.min(0.75, logStep)));
       // Scale the altitude, retaining a small gap outside the bounding sphere.
       const next = radius + (offset.length() - radius) * factor;
       const distance = Math.max(controls.minDistance, Math.min(controls.maxDistance, next));
-      changeOffset(offset.setLength(distance));
+      const delta = offset.clone().setLength(distance).sub(offset);
+      changeOffset(offset.add(limitMovement(delta)));
     }
 
     function setMinimumDistance() {
-      controls.minDistance = targetRadius() * (1 + MIN_CLEARANCE_RADII);
+      controls.minDistance = trackedBody ? targetRadius() * (1 + MIN_CLEARANCE_RADII) : 0;
     }
 
     function center(key) {
       trackedBody = key;
+      controls.enabled = key !== null;
       for (const id of Object.keys(meshes)) labels[id].setAttribute("aria-pressed", String(id === key));
       onTarget(key);
     }
@@ -179,7 +275,7 @@
       changeOffset(offset);
     }
 
-    function setScale(mode, selectedBody) {
+    function setScale(mode) {
       const previousRadius = targetRadius();
       const offset = camera.position.clone().sub(controls.target);
       const distance = offset.length();
@@ -192,11 +288,8 @@
       // Preserve the close-up framing and angle across scale changes.
       if (trackedBody && meshes[trackedBody].visible && distance <= previousRadius * 20) {
         offset.setLength(distance * targetRadius() / previousRadius);
-      } else if (mode === "real") {
-        // At system scale the real planets are smaller than a screen pixel.
-        focus(trackedBody ?? selectedBody);
-        return;
       }
+      if (!trackedBody) keepFreeCameraOutside();
       changeOffset(offset);
     }
 
@@ -213,10 +306,29 @@
 
     const touches = new Map();
     let clickStart = null;
-    function pinchSpan() {
-      if (touches.size !== 2) return 0;
+    let freeDrag = null;
+    let lastPair = null;
+    let pinchFrame = null;
+    function touchPair() {
+      if (touches.size !== 2) return null;
       const [first, second] = touches.values();
-      return Math.hypot(first.x - second.x, first.y - second.y);
+      return {
+        span: Math.hypot(first.x - second.x, first.y - second.y),
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+    }
+
+    function updatePinch() {
+      pinchFrame = null;
+      const pair = touchPair();
+      if (lastPair?.span && pair?.span) {
+        if (lastPair.span !== pair.span) zoom(Math.log(lastPair.span / pair.span));
+        if (!trackedBody && (lastPair.x !== pair.x || lastPair.y !== pair.y)) {
+          panFree(pair.x - lastPair.x, pair.y - lastPair.y);
+        }
+      }
+      lastPair = pair;
     }
 
     canvas.addEventListener("pointerdown", (event) => {
@@ -226,25 +338,48 @@
         canvas.setPointerCapture(id);
       }
       if (touches.size > 1) {
+        lastPair = touchPair();
         clickStart = null;
+        freeDrag = null;
         controls.enableRotate = false;
-      } else if (event.button === 0) {
-        clickStart = { id, x, y };
+        return;
+      }
+      if (event.button === 0) clickStart = { id, x, y };
+      if (!trackedBody && (event.button === 0 || event.button === 2)) {
+        freeDrag = { id, x, y, pan: event.shiftKey || event.button === 2 };
+        canvas.setPointerCapture(id);
       }
     });
     canvas.addEventListener("pointermove", (event) => {
       const { pointerId: id, clientX: x, clientY: y } = event;
       if (clickStart?.id === id && Math.hypot(x - clickStart.x, y - clickStart.y) > 6) clickStart = null;
-      if (!touches.has(id)) return;
-      const previousSpan = pinchSpan();
-      touches.set(id, { x, y });
-      const span = pinchSpan();
-      if (previousSpan && span) zoom(Math.log(previousSpan / span));
+      if (touches.has(id)) {
+        touches.set(id, { x, y });
+        if (touches.size > 1) {
+          if (pinchFrame === null) pinchFrame = requestAnimationFrame(updatePinch);
+          return;
+        }
+      }
+      if (!trackedBody && freeDrag?.id === id) {
+        const dx = x - freeDrag.x;
+        const dy = y - freeDrag.y;
+        freeDrag.x = x;
+        freeDrag.y = y;
+        if (clickStart) return;
+        if (freeDrag.pan) panFree(dx, dy);
+        else turnFree(dx * 0.005, dy * 0.005);
+      }
     });
     function dropPointer(event) {
+      if (touches.has(event.pointerId) && pinchFrame !== null) {
+        cancelAnimationFrame(pinchFrame);
+        updatePinch();
+      }
       touches.delete(event.pointerId);
+      lastPair = touchPair();
       if (touches.size < 2) controls.enableRotate = true;
       if (clickStart?.id === event.pointerId) clickStart = null;
+      if (freeDrag?.id === event.pointerId) freeDrag = null;
     }
     function finishPointer(event) {
       const wasClick = clickStart?.id === event.pointerId;
@@ -254,6 +389,7 @@
     canvas.addEventListener("pointerup", finishPointer);
     canvas.addEventListener("pointercancel", dropPointer);
     canvas.addEventListener("lostpointercapture", dropPointer);
+    canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     stage.addEventListener("wheel", (event) => {
       event.preventDefault();
       const unitSize = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1;
@@ -279,9 +415,28 @@
         zoom(event.key === "-" ? 0.22 : -0.22);
         return;
       }
+      if (!trackedBody) {
+        const key = event.key.toLowerCase();
+        if (key === "w" || key === "s") {
+          event.preventDefault();
+          zoom(key === "w" ? -0.16 : 0.16);
+          return;
+        }
+        const move = { a: [1, 0], d: [-1, 0], q: [0, -1], e: [0, 1] }[key];
+        if (move) {
+          event.preventDefault();
+          const step = canvas.clientHeight * 0.07;
+          panFree(move[0] * step, move[1] * step);
+          return;
+        }
+      }
       const turn = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
       if (!turn) return;
       event.preventDefault();
+      if (!trackedBody) {
+        turnFree(0.13 * turn[0], 0.13 * turn[1]);
+        return;
+      }
       const offset = camera.position.clone().sub(controls.target);
       const angle = new THREE.Spherical().setFromVector3(offset);
       angle.theta += 0.13 * turn[0];
@@ -316,9 +471,10 @@
           const target = meshes[trackedBody].position;
           camera.position.sub(controls.target).add(target);
           controls.target.copy(target);
-          if (controls.update()) return;
+        } else {
+          keepFreeCameraOutside();
         }
-        draw();
+        updateCamera();
       },
       select(key) {
         for (const id of Object.keys(meshes)) labels[id].classList.toggle("selected", id === key);
@@ -326,8 +482,16 @@
         draw();
       },
       focus,
+      free() {
+        if (!trackedBody) return;
+        freeReference = Math.max(1e-9, camera.position.distanceTo(controls.target) - targetRadius());
+        center(null);
+        setMinimumDistance();
+        updateCamera();
+      },
       reset() {
         center(null);
+        freeReference = overview.length();
         controls.target.set(0, 0, 0);
         setMinimumDistance();
         changeOffset(overview);

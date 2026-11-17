@@ -217,6 +217,22 @@ class MarsGeometryTests(unittest.TestCase):
         self.assertEqual(selected["earth"], simulation["geometry"]["positions"]["earth"])
         self.assertEqual(selected["mars"], simulation["geometry"]["positions"]["mars"])
 
+    def test_sampled_mars_orbit_has_distinct_perihelion_and_aphelion(self) -> None:
+        trajectory = solar_simulation(
+            "2024-01-01T00:00:00Z", end="2025-12-31T00:00:00Z"
+        )["trajectory"]
+        radii = [sqrt(sum(sample["mars"][axis] ** 2 for axis in _AXES)) for sample in trajectory]
+        perihelion = min(radii)
+        aphelion = max(radii)
+        self.assertAlmostEqual(perihelion, 1.3815, places=4)
+        self.assertAlmostEqual(aphelion, 1.6660, places=4)
+        self.assertAlmostEqual((aphelion - perihelion) / (aphelion + perihelion), 0.09336, places=4)
+        for radius in (perihelion, aphelion):
+            sample = trajectory[radii.index(radius)]
+            geometry = mars_geometry(sample["instant_utc"])
+            self.assertEqual(sample["mars"], geometry["positions"]["mars"])
+            self.assertAlmostEqual(radius, geometry["distances"]["mars_sun"], places=12)
+
     def test_custom_trajectory_samples_a_short_cut_and_includes_both_ends(self) -> None:
         start = "2025-01-16T12:00:00Z"
         end = "2025-01-16T12:00:01Z"

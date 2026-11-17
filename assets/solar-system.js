@@ -9,6 +9,7 @@
   const AXES = ["x", "y", "z"];
   const UNAVAILABLE = "Data fora da cobertura. Use um instante UTC entre 2000 e 2049.";
   const INVALID_INTERVAL = "O fim do recorte deve ser posterior ao início.";
+  const PLAYBACK_DURATION_MS = 36_000;
   const formatNumber = new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 4, minimumFractionDigits: 4,
   });
@@ -25,6 +26,12 @@
     element.textContent = formatEpoch(instant);
   }
 
+  function utcMilliseconds(instant) {
+    const seconds = Date.parse(`${instant.slice(0, 19)}Z`);
+    const fraction = instant[19] === "." ? Number(`0${instant.slice(19, -1)}`) : 0;
+    return seconds + 1000 * fraction;
+  }
+
   window.createSolarSystemView = (root, requestApi) => {
     const find = (selector) => root.querySelector(selector);
     const stage = find("#gps-stage");
@@ -39,6 +46,7 @@
     const slider = find("#gps-timeline");
     const play = find("#gps-play");
     const focus = find("#gps-focus");
+    const free = find("#gps-free");
     const bodyButtons = root.querySelectorAll("[data-gps-body]");
     const clockButtons = root.querySelectorAll("[data-gps-clock]");
     const scaleButtons = root.querySelectorAll("[data-gps-scale]");
@@ -48,6 +56,7 @@
     let active = false;
     let liveWindow = null;
     let range = null;
+    let orbitExtents = {};
     let positions = null;
     let selected = "mars";
     let mode = "live";
@@ -70,6 +79,12 @@
       find("#gps-body-diameter").textContent = `${formatDiameter.format(2 * body.equatorialKm)} km`;
       find("#gps-distance-sun").textContent = `${formatNumber.format(distance(position, positions.sun))} ua`;
       find("#gps-distance-earth").textContent = `${formatNumber.format(distance(position, positions.earth))} ua`;
+      const extent = orbitExtents[selected];
+      find("#gps-orbit-extent").hidden = !extent;
+      if (extent) {
+        find("#gps-orbit-radii").textContent =
+          `${formatNumber.format(extent.min)}–${formatNumber.format(extent.max)} ua`;
+      }
       readout.hidden = false;
     }
 
@@ -97,6 +112,22 @@
       showPositions(instant_utc, { sun: geometry.positions.sun, earth, mars });
     }
 
+    function loadOrbits(samples) {
+      orbitExtents = {};
+      for (const body of ["earth", "mars"]) {
+        let min = Infinity;
+        let max = 0;
+        for (const sample of samples) {
+          const { x, y, z } = sample[body];
+          const radius = Math.hypot(x, y, z);
+          min = Math.min(min, radius);
+          max = Math.max(max, radius);
+        }
+        orbitExtents[body] = { min, max };
+      }
+      scene?.loadTrajectory(samples);
+    }
+
     function showRange(data, isDemo, index) {
       range = { data, isDemo, index };
       const samples = data.trajectory;
@@ -110,12 +141,12 @@
       slider.max = samples.length - 1;
       slider.disabled = false;
       play.disabled = false;
-      scene?.loadTrajectory(samples);
+      loadOrbits(samples);
       showSample(index);
     }
 
     function stopPlayback() {
-      clearInterval(playTimer);
+      cancelAnimationFrame(playTimer);
       playTimer = null;
       play.textContent = "Reproduzir";
     }
@@ -126,13 +157,21 @@
         return;
       }
       const last = Number(slider.max);
-      const stride = Math.max(1, Math.ceil(last / 144));
       if (range.index === last) showSample(0);
+      const sampleTimes = range.data.trajectory.map((sample) => utcMilliseconds(sample.instant_utc));
+      const startTime = sampleTimes[range.index];
+      const speed = (sampleTimes[last] - sampleTimes[0]) / PLAYBACK_DURATION_MS;
+      const startFrame = performance.now();
       play.textContent = "Pausar";
-      playTimer = setInterval(() => {
-        showSample(Math.min(last, range.index + stride));
-        if (range.index === last) stopPlayback();
-      }, 240);
+      function advance(now) {
+        const simulatedTime = startTime + (now - startFrame) * speed;
+        let next = range.index;
+        while (next < last && sampleTimes[next + 1] <= simulatedTime) next += 1;
+        if (next !== range.index) showSample(next);
+        if (next === last) stopPlayback();
+        else playTimer = requestAnimationFrame(advance);
+      }
+      playTimer = requestAnimationFrame(advance);
     }
 
     function cancelRequests() {
@@ -165,7 +204,7 @@
         if (controller.signal.aborted) return;
         if (needsWindow) {
           liveWindow = result;
-          scene?.loadTrajectory(result.trajectory);
+          loadOrbits(result.trajectory);
         }
         const geometry = needsWindow ? result.geometry : result;
         showPositions(geometry.instant_utc, geometry.positions);
@@ -201,7 +240,7 @@
       setStatus("");
       if (isLive) {
         liveState.textContent = "Sincronizando o relógio UTC…";
-        if (liveWindow) scene?.loadTrajectory(liveWindow.trajectory);
+        if (liveWindow) loadOrbits(liveWindow.trajectory);
         refreshLive();
       } else {
         if (range) {
@@ -259,9 +298,9 @@
         const scale = button.dataset.gpsScale;
         for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option === button));
         find("#gps-scale-note").textContent = scale === "real"
-          ? "Diâmetros na mesma escala das distâncias. O modo aproxima a câmera do astro ao abrir."
+          ? "Escala física. ◇ marca astros com diâmetro aparente inferior a 1 pixel. Selecione um rótulo para se aproximar."
           : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
-        scene?.setScale(scale, selected);
+        scene?.setScale(scale);
       });
     }
     focus.addEventListener("click", () => {
@@ -273,6 +312,7 @@
       start.focus();
     });
     find("#gps-reset").addEventListener("click", () => scene?.reset());
+    free.addEventListener("click", () => scene?.free());
     find("#gps-zoom-in").addEventListener("click", () => scene?.zoom(-0.22));
     find("#gps-zoom-out").addEventListener("click", () => scene?.zoom(0.22));
     find("#gps-explore").addEventListener("click", () => {
@@ -297,7 +337,8 @@
             scene = window.createSolarScene(stage, BODIES, {
               onSelect: selectBody,
               onTarget: (key) => {
-                find("#gps-camera-target").textContent = key ? BODIES[key].label : "Sol (visão geral)";
+                find("#gps-camera-target").textContent = key ? `Foco em ${BODIES[key].label}` : "Navegação livre";
+                free.setAttribute("aria-pressed", String(key === null));
               },
               onMissingTextures: (names) => {
                 const notice = find("#gps-texture-status");

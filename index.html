@@ -1287,9 +1287,10 @@
                   <span id="gps-live-state" hidden></span>
                   <button id="gps-edit-date" type="button">Escolher recorte</button>
                 </div>
-                <p class="gps-camera-target">Centro da câmera · <strong id="gps-camera-target">Sol (visão geral)</strong></p>
+                <p class="gps-camera-target">Câmera · <strong id="gps-camera-target">Navegação livre</strong></p>
               </div>
               <div class="gps-camera" role="group" aria-label="Controles da câmera">
+                <button class="gps-button" id="gps-free" type="button" aria-pressed="true" data-gps-camera>Navegação livre</button>
                 <button class="gps-button" id="gps-reset" type="button" data-gps-camera>Visão geral</button>
                 <button class="gps-button gps-icon-button" id="gps-zoom-out" type="button" aria-label="Afastar" data-gps-camera>−</button>
                 <button class="gps-button gps-icon-button" id="gps-zoom-in" type="button" aria-label="Aproximar" data-gps-camera>+</button>
@@ -1316,8 +1317,13 @@
               <span><strong>Plano XY</strong> · Origem no Sol · Malha de 0,5 ua · ICRS aproximado</span>
               <span id="gps-scale-note">Diâmetros ampliados para leitura. Posições e distâncias em escala linear.</span>
               <span>Texturas e orientação de superfície ilustrativas.</span>
+              <div class="gps-orbit-legend" role="group" aria-label="Legenda das curvas">
+                <span class="gps-orbit-key gps-earth">Órbita da Terra</span>
+                <span class="gps-orbit-key gps-mars">Órbita de Marte</span>
+                <span>Segmentos entre posições heliocêntricas de Astropy/ERFA. Transferência Terra–Marte indisponível.</span>
+              </div>
               <span id="gps-texture-status" role="status" hidden></span>
-              <span id="gps-instructions">Selecione um astro pelo modelo, rótulo ou painel. Arraste ou use as setas para girar. Use a rolagem, a pinça ou os botões para ajustar o zoom.</span>
+              <span id="gps-instructions">Arraste ou use as setas para olhar. Com um astro selecionado, esses controles giram ao redor dele. Use roda, pinça ou +/− para o zoom. Em navegação livre, use W/S, A/D e Q/E para mover, ou arraste com o botão direito, Shift ou dois dedos para deslocar a vista.</span>
             </figcaption>
           </figure>
 
@@ -1378,6 +1384,7 @@
                 <div><dt>Diâmetro equatorial</dt><dd id="gps-body-diameter"></dd></div>
                 <div><dt>Distância ao Sol</dt><dd id="gps-distance-sun"></dd></div>
                 <div><dt>Distância à Terra</dt><dd id="gps-distance-earth"></dd></div>
+                <div id="gps-orbit-extent" hidden><dt>Distância ao Sol nas amostras</dt><dd id="gps-orbit-radii"></dd></div>
               </dl>
             </section>
           </div>

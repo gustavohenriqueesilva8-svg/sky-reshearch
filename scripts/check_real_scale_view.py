@@ -1,4 +1,4 @@
-"""Browser regression check for entering real scale from the overview."""
+"""Browser regression check for keeping the real-scale overview and inspecting Mars."""
 
 import argparse
 from io import BytesIO
@@ -24,10 +24,16 @@ def main() -> None:
             page = context.new_page()
             page.goto(args.url)
             expect(page.locator("#gps-readout")).to_be_visible()
-            expect(page.locator("#gps-camera-target")).to_have_text("Sol (visão geral)")
+            expect(page.locator("#gps-camera-target")).to_have_text("Navegação livre")
             page.get_by_role("button", name="Proporção real", exact=True).click()
-            expect(page.locator("#gps-camera-target")).to_have_text("Marte")
+            expect(page.locator("#gps-camera-target")).to_have_text("Navegação livre")
             expect(page.locator("#gps-render-error")).to_be_hidden()
+            mars = page.get_by_role("button", name="Centralizar Marte na cena")
+            expect(mars).to_have_attribute("data-subpixel", "")
+            expect(page.get_by_role("button", name="Centralizar Terra na cena")).to_have_attribute("data-subpixel", "")
+            mars.click()
+            expect(page.locator("#gps-camera-target")).to_have_text("Foco em Marte")
+            expect(mars).not_to_have_attribute("data-subpixel", "")
 
             canvas = page.locator("#gps-stage canvas")
             with Image.open(BytesIO(canvas.screenshot())) as capture:
@@ -40,7 +46,9 @@ def main() -> None:
                     for red, green, blue in zip(*channels, strict=True)
                 )
                 assert mars_pixels >= 1800, f"Marte não apareceu no centro a {width}px"
-            print(f"{width}px: Proporção real focalizou e mostrou Marte com um clique.")
+            page.get_by_role("button", name="Navegação livre", exact=True).click()
+            expect(page.locator("#gps-camera-target")).to_have_text("Navegação livre")
+            print(f"{width}px: visão geral com marcadores, Marte renderizado ao aproximar e retorno à navegação livre.")
             context.close()
         browser.close()
 

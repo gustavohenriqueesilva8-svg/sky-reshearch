@@ -188,7 +188,8 @@ body[data-active-page="home"] .nav-tab.active {
   font: 600 0.76rem 'Overpass', system-ui, sans-serif;
   cursor: pointer;
 }
-.gps-camera { display: flex; gap: 6px; }
+.gps-camera { display: flex; flex-wrap: wrap; gap: 6px; }
+#gps-free[aria-pressed="true"] { border-color: var(--gps-accent); color: var(--gps-accent); }
 .gps-scale {
   display: flex;
   align-items: center;
@@ -242,6 +243,7 @@ button.gps-scene-label {
 button.gps-scene-label:hover, button.gps-scene-label[aria-pressed="true"] {
   border-color: var(--body-color);
 }
+button.gps-scene-label[data-subpixel]::before { content: "◇ "; }
 .gps-axis-x { color: #dfad89; }
 .gps-axis-y { color: #83d4e2; }
 .gps-axis-z { color: #b8bcef; }
@@ -256,6 +258,10 @@ button.gps-scene-label:hover, button.gps-scene-label[aria-pressed="true"] {
   line-height: 1.4;
 }
 .gps-scene figcaption strong { color: var(--gps-ink); }
+.gps-orbit-legend { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: 5px 14px; }
+.gps-orbit-key { display: inline-flex; align-items: center; gap: 5px; }
+.gps-orbit-key::before { content: ""; width: 14px; height: 2px; background: var(--body-color); }
+#gps-orbit-radii { white-space: nowrap; }
 #gps-instructions { flex-basis: 100%; }
 
 .gps-time { grid-area: time; padding: 12px 14px; }
