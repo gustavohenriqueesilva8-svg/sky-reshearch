@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import app
+from ephemerides import mars_geometry
 
 
 def synthetic_hdu(survey: str):
@@ -77,6 +78,27 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(catalog["andromeda"]["category"], "classic")
         self.assertEqual(catalog["barnard"]["suggested_action"], "spherex-subtract")
         self.assertIn("recommended", catalog["wise0855"])
+
+    def test_mars_endpoint_serves_real_geometry_for_each_instant(self):
+        endpoint = "/api/ephemerides/mars"
+        first = self.client.get(endpoint, params={"instant": "2025-01-16T09:00:00-03:00"})
+        second = self.client.get(endpoint, params={"instant": "2025-04-16T12:00:00Z"})
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertIn("no-store", first.headers["cache-control"])
+        self.assertEqual(first.json(), mars_geometry("2025-01-16T12:00:00Z"))
+        self.assertEqual(second.json(), mars_geometry("2025-04-16T12:00:00Z"))
+        self.assertNotEqual(first.json()["positions"]["mars"], second.json()["positions"]["mars"])
+
+    def test_mars_endpoint_rejects_invalid_instants(self):
+        for instant, expected in (
+            ("2025-01-16T12:00:00", "Expected a timestamp"),
+            ("2050-01-01T00:00:00Z", "UTC years 2000 through 2049"),
+        ):
+            with self.subTest(instant=instant):
+                response = self.client.get("/api/ephemerides/mars", params={"instant": instant})
+                self.assertEqual(response.status_code, 422)
+                self.assertIn(expected, response.json()["detail"])
 
     @patch.object(app.SkyView, "get_images")
     def test_dss_epochs_and_metadata(self, mocked):

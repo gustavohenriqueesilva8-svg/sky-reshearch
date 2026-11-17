@@ -10,13 +10,13 @@ Encontre um objeto pelo nome ou identificador e descubra em que direção ele ap
 
 ## O que funciona hoje
 
-A busca, o catálogo e as duas vistas funcionam com os dados locais. Os filtros do catálogo ajudam a encontrar alvos da Via Láctea e listam as galáxias externas em um grupo separado. A carta mostra a direção dos objetos dos dois grupos. A vista 3D representa uma amostra dos objetos da Via Láctea cadastrados em relação à Terra. Para **R Draconis**, a carta indica a direção e a vista 3D explica que falta uma distância para posicioná-la.
+A busca, o catálogo, a Carta 2D e a Vista 3D funcionam com os dados locais. Os filtros do catálogo ajudam a encontrar alvos da Via Láctea e listam as galáxias externas em um grupo separado. A carta mostra a direção dos objetos dos dois grupos. A vista 3D representa uma amostra dos objetos da Via Láctea cadastrados em relação à Terra. Para **R Draconis**, a carta indica a direção e a vista 3D explica que falta uma distância para posicioná-la.
 
-Ações no mapa como pesquisar, selecionar ou trocar de vista são locais. O botão de observação encaminha o alvo para o comparador ou o espectro, conforme a ação disponível. As consultas aos arquivos remotos dependem da cobertura e da disponibilidade da fonte.
+Ações do catálogo como pesquisar, selecionar ou trocar de vista são locais. O botão de observação encaminha o alvo para o comparador ou o espectro, conforme a ação disponível. As consultas aos arquivos remotos dependem da cobertura e da disponibilidade da fonte. Já a página **Sistema Solar** calcula posições de Marte e da Terra por data e hora por meio do servidor local.
 
 ## Como executar
 
-Para usar o mapa e a atividade de Barnard com os dados locais, abra `index.html` no navegador mantendo a pasta `assets/` no mesmo diretório. Para habilitar as consultas aos arquivos e o laboratório, use Python 3.10+:
+Para usar o catálogo estelar e a atividade de Barnard com os dados locais, abra `index.html` no navegador mantendo a pasta `assets/` no mesmo diretório. Para habilitar o Sistema Solar, as consultas aos arquivos e o laboratório, use Python 3.10+:
 
 ```bash
 python -m venv .venv
@@ -27,7 +27,13 @@ python app.py
 
 Abra [http://127.0.0.1:8002](http://127.0.0.1:8002). A [documentação da API](http://127.0.0.1:8002/docs) é servida pelo mesmo processo. Para abrir o [exemplo de Barnard diretamente](http://127.0.0.1:8002/?page=workbench&example=barnard), use `?page=workbench&example=barnard`. As consultas ao vivo exigem conexão com o IRSA ou o SkyView, conforme a fonte escolhida.
 
-### Geometria de Marte em Python
+### Localize Marte no Sistema Solar
+
+Com o servidor local em execução, abra [Sistema Solar](http://127.0.0.1:8002/?page=solar-system) ou clique em **Localizar Marte** na página inicial ou no **Mapa Estelar**. A vista abre no instante atual. Edite **Data e hora (UTC)** e clique em **Atualizar posição** para ver como os marcadores e as distâncias Marte–Terra e Marte–Sol mudam. Alterne entre **Vista inclinada**, **Plano XY** e **Plano XZ** ou abra a tabela de coordenadas. Os círculos são guias de escala, com intervalos de 0,5 unidade astronômica.
+
+A página consulta `GET /api/ephemerides/mars?instant=2025-01-16T12:00:00Z`. O cálculo usa a efeméride embutida no servidor e funciona sem conexão externa. As posições são geométricas em relação ao Sol.
+
+#### Geometria de Marte em Python
 
 `mars_geometry(instant)` aceita `YYYY-MM-DDTHH:MM:SS` com uma fração opcional de até seis dígitos e fuso explícito (`Z` ou `±HH:MM`). A faixa UTC vai de `2000-01-01T00:00:00Z` (inclusive) a `2050-01-01T00:00:00Z` (exclusive). Entradas inválidas, fora da faixa ou com segundo `60` geram `ValueError`.
 
@@ -71,7 +77,7 @@ As principais rotas são `/api/spherex/blink` (par SPHEREx), `/api/motion_video`
 1. **Navegação por coordenadas e datas.** Adicionar busca por coordenadas e regiões, camadas de cobertura por levantamento e links para compartilhar parâmetros de investigação.
 2. **Investigações reproduzíveis.** Guardar observações e candidatos com IDs, datas, bandas, recortes e parâmetros de alinhamento. Permitir anotações e compartilhamento sem depender de um único arquivo remoto.
 3. **Comparação quantitativa.** Acrescentar séries com várias épocas, incertezas, fotometria e astrometria calibradas. Apoiar validação cruzada de candidatos e distinguir artefatos, estrelas variáveis e objetos móveis.
-4. **Acompanhamento de objetos.** Integrar catálogos de distância e efemérides para estimar posições em outras datas, com referencial e incerteza explícitos.
+4. **Acompanhamento de objetos.** Ampliar a visualização de Marte para outros corpos e integrar catálogos de distância, com referencial e incerteza explícitos.
 
 ## Fontes, créditos e licença
 

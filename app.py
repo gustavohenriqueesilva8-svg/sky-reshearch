@@ -32,6 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from scipy.ndimage import median_filter
 
+from ephemerides import MarsGeometry, mars_geometry
+
 logger = logging.getLogger(__name__)
 conf.remote_timeout = 120
 
@@ -982,6 +984,17 @@ def _normalize(data: np.ndarray, median: float, std: float) -> np.ndarray:
 async def get_celestial_catalog():
     """Retorna os presets astrométricos e parâmetros recomendados da interface."""
     return JSONResponse({"items": CELESTIAL_CATALOG})
+
+
+@app.get("/api/ephemerides/mars", response_model=None)
+def get_mars_geometry(
+    instant: str = Query(..., description="Data e hora ISO 8601 com fuso explícito."),
+) -> MarsGeometry:
+    """Retorna as posições heliocêntricas e as distâncias de Marte em au."""
+    try:
+        return mars_geometry(instant)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/blink_with_metadata")

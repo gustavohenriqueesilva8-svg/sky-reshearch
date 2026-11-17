@@ -1352,6 +1352,64 @@
         font-size: 0.82rem;
       }
 
+      /* Sistema Solar */
+      .solar-heading { margin: 0 0 18px; }
+      .solar-heading h2 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.15rem); }
+      .solar-heading p { margin: 6px 0 0; color: var(--text-muted); }
+
+      .solar-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
+        grid-template-areas: "plot controls" "plot readout";
+        grid-template-rows: auto 1fr;
+        align-items: start;
+        gap: 16px;
+      }
+
+      .solar-controls { grid-area: controls; padding: 18px; }
+      .solar-controls label { display: grid; gap: 6px; font-weight: 700; }
+      .solar-controls input { min-width: 0; }
+      .solar-controls .starmap-tools { gap: 8px; margin-bottom: 0; }
+      .solar-controls .map-filter { padding: 9px 14px; }
+      .solar-controls p { margin: 8px 0 0; color: var(--text-muted); font-size: 0.82rem; }
+      #solar-status[data-state="error"] { color: var(--accent-amber); }
+      #solar-status:empty { display: none; }
+
+      .solar-plot { grid-area: plot; margin: 0; padding: 16px; min-width: 0; }
+      .solar-plot .map-view-switch { margin-bottom: 10px; }
+      #solar-canvas {
+        display: block;
+        width: 100%;
+        height: clamp(280px, 47vw, 465px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        background: radial-gradient(ellipse at center, #102345, #040a19 75%);
+      }
+      .solar-plot figcaption, .solar-model {
+        margin: 10px 0 0;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        line-height: 1.5;
+      }
+      .solar-legend { margin-top: 10px; }
+      .solar-legend .sun-dot { background: #ffd078; }
+      .solar-legend .earth-dot { background: #68c9ff; }
+      .solar-legend .mars-dot { background: #ff9379; }
+
+      .solar-readout { grid-area: readout; min-width: 0; padding: 18px; }
+      .solar-readout h3 { margin: 0; }
+      #solar-epoch { display: block; margin-top: 4px; color: var(--text-muted); font-size: 0.76rem; }
+      .solar-distances { margin: 10px 0 0; }
+      .solar-distances div { padding: 10px 0; border-bottom: 1px solid var(--glass-border); }
+      .solar-distances dt { color: var(--text-muted); font-size: 0.86rem; }
+      .solar-distances dd { margin: 3px 0 0; font-size: 1.45rem; font-weight: 700; }
+      .solar-readout details { margin-top: 14px; font-size: 0.8rem; }
+      .solar-readout summary { cursor: pointer; }
+      .solar-readout table { width: 100%; margin-top: 8px; border-collapse: collapse; }
+      .solar-readout th, .solar-readout td { padding: 5px 3px; border-bottom: 1px solid var(--glass-border); }
+      .solar-readout tbody th, .solar-readout thead th:first-child { text-align: left; }
+      .solar-readout td { text-align: right; font-variant-numeric: tabular-nums; }
+
       /* Espectro */
       .spectrum-page-grid {
         display: grid;
@@ -1411,9 +1469,15 @@
         .welcome-hero, .comparison-layout.has-temporal-result { grid-template-columns: 1fr; }
         .home-preview { max-width: 430px; }
         .investigation-header h2 { scroll-margin-top: 12px; }
+        .solar-layout {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-areas: "controls" "plot" "readout";
+        }
       }
 
       @media (max-width: 560px) {
+        .top-nav { flex-wrap: wrap; border-radius: 16px; }
+        .nav-tab { padding: 7px 10px; }
         .image-mode-selector {
           grid-template-columns: 1fr;
         }
@@ -1454,6 +1518,7 @@
           <button class="nav-tab active" data-page="home" type="button">Boas-vindas</button>
           <button class="nav-tab" data-page="workbench" type="button">Explorar Céu</button>
           <button class="nav-tab" data-page="starmap" type="button">Mapa Estelar</button>
+          <button class="nav-tab" data-page="solar-system" type="button">Sistema Solar</button>
           <button class="nav-tab" data-page="spectrum" type="button">Espectro</button>
         </nav>
 
@@ -1487,6 +1552,7 @@
             <div class="home-actions">
               <button class="action-btn btn-neon" type="button" data-investigate-target="barnard">Comparar a Estrela de Barnard</button>
               <button class="action-btn" type="button" data-page-link="starmap">Procurar outro alvo no mapa</button>
+              <button class="action-btn" type="button" data-page-link="solar-system">Localizar Marte</button>
             </div>
             <p class="home-quiet">Exemplo guiado com imagens de arquivo incluídas no aplicativo.</p>
           </div>
@@ -1794,7 +1860,10 @@
               <h2 id="starmap-title" style="margin:0; font-size:1.25rem; color:#ffffff;">Encontre um astro</h2>
               <p style="margin:4px 0 0; color:var(--text-muted); font-size:0.84rem;">Localize objetos da Via Láctea e veja em que direção aparecem e a que distância aproximada estão da Terra.</p>
             </div>
-            <button class="action-btn btn-neon" type="button" data-page-link="workbench">Voltar ao Visor</button>
+            <div class="starmap-tools">
+              <button class="action-btn" type="button" data-page-link="solar-system">Localizar Marte</button>
+              <button class="action-btn btn-neon" type="button" data-page-link="workbench">Voltar ao Visor</button>
+            </div>
           </div>
         </div>
 
@@ -1864,9 +1933,59 @@
         </div>
       </section>
 
-      <!-- ===================================================================
-           PÁGINA 4: ASSINATURA ESPECTRAL (0,75–5,00 µm)
-           =================================================================== -->
+      <section id="page-solar-system" class="page-view" aria-labelledby="solar-title">
+        <header class="solar-heading">
+          <h2 id="solar-title">Onde está Marte?</h2>
+          <p>Escolha um instante para ver a posição de Marte e da Terra em relação ao Sol.</p>
+        </header>
+        <div class="solar-layout">
+          <form id="solar-form" class="glass-surface solar-controls">
+            <label for="solar-instant">Data e hora (UTC)
+              <input id="solar-instant" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="solar-date-range" required>
+            </label>
+            <p id="solar-date-range">De 1 jan. 2000 a 31 dez. 2049.</p>
+            <div class="starmap-tools">
+              <button class="action-btn btn-neon" type="submit">Atualizar posição</button>
+              <button id="solar-now" class="map-filter" type="button">Agora</button>
+            </div>
+            <p id="solar-status" role="status"></p>
+          </form>
+
+          <figure class="glass-surface solar-plot">
+            <div class="map-view-switch" role="group" aria-label="Projeção do Sistema Solar">
+              <button class="map-filter active" type="button" data-solar-view="tilted" aria-pressed="true">Vista inclinada</button>
+              <button class="map-filter" type="button" data-solar-view="xy" aria-pressed="false">Plano XY</button>
+              <button class="map-filter" type="button" data-solar-view="xz" aria-pressed="false">Plano XZ</button>
+            </div>
+            <canvas id="solar-canvas" role="img" aria-label="Posições do Sol, da Terra e de Marte" aria-describedby="solar-caption">As posições e distâncias podem ser consultadas na tabela e nos valores abaixo.</canvas>
+            <div class="distance-map-legend solar-legend" aria-label="Legenda do Sistema Solar">
+              <span><i class="sun-dot" aria-hidden="true"></i>Sol</span>
+              <span><i class="earth-dot" aria-hidden="true"></i>Terra</span>
+              <span><i class="mars-dot" aria-hidden="true"></i>Marte</span>
+            </div>
+            <figcaption id="solar-caption">Os círculos são guias de escala a cada 0,5 ua. O tamanho dos marcadores é ilustrativo.</figcaption>
+          </figure>
+
+          <section id="solar-readout" class="glass-surface solar-readout" aria-labelledby="solar-distances-title" hidden>
+            <h3 id="solar-distances-title">Distâncias de Marte</h3>
+            <time id="solar-epoch" class="mono-val"></time>
+            <dl class="solar-distances">
+              <div><dt>Marte — Terra</dt><dd id="solar-earth-distance"></dd></div>
+              <div><dt>Marte — Sol</dt><dd id="solar-sun-distance"></dd></div>
+            </dl>
+            <p class="solar-model" id="solar-model"></p>
+            <details>
+              <summary>Coordenadas heliocêntricas (ua)</summary>
+              <table aria-label="Coordenadas heliocêntricas em unidades astronômicas">
+                <thead><tr><th scope="col">Astro</th><th scope="col">X</th><th scope="col">Y</th><th scope="col">Z</th></tr></thead>
+                <tbody id="solar-coordinates"></tbody>
+              </table>
+            </details>
+          </section>
+        </div>
+      </section>
+
+      <!-- Assinatura espectral (0,75–5,00 µm) -->
       <section id="page-spectrum" class="page-view" aria-labelledby="spectrum-title">
         <div class="glass-surface spectrum-panel" style="margin-bottom: 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
           <div>
@@ -1909,10 +2028,12 @@
 
     <script src="assets/barnard-demo.js"></script>
     <script src="assets/temporal-viewer.js"></script>
+    <script src="assets/solar-system.js"></script>
     <script>
       const BASE_API_URL = window.location.protocol === "file:"
         ? "http://127.0.0.1:8002/api"
         : new URL("./api", window.location.href).href;
+      let solarSystemView;
       const GUIDED_QUESTIONS = {
         barnard: "A Estrela de Barnard aparece no mesmo lugar em duas épocas diferentes?",
         rwaurigae: "A estrela parece mais destacada em uma época do que na outra?",
@@ -2609,6 +2730,7 @@
         }
         if (pageId !== "workbench" && videoState.playing) chooseTemporalEpoch(videoState.activeEpoch);
         if (pageId === "starmap") requestAnimationFrame(() => { drawSkyMap(); drawDistanceMap(); });
+        if (pageId === "solar-system") solarSystemView.activate();
         if (pageId === "spectrum") updateSpectrumTargetSummary();
       }
 
@@ -4064,6 +4186,7 @@
       }
 
       document.addEventListener("DOMContentLoaded", () => {
+        solarSystemView = createSolarSystemView(document.getElementById("page-solar-system"), requestApi);
         renderPresetOptions();
         setupSkyMapControls();
 
