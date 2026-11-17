@@ -1287,6 +1287,7 @@
                   <span id="gps-live-state" hidden></span>
                   <button id="gps-edit-date" type="button">Escolher recorte</button>
                 </div>
+                <p class="gps-camera-target">Centro da câmera · <strong id="gps-camera-target">Sol (visão geral)</strong></p>
               </div>
               <div class="gps-camera" role="group" aria-label="Controles da câmera">
                 <button class="gps-button" id="gps-reset" type="button" data-gps-camera>Visão geral</button>
@@ -1296,7 +1297,7 @@
             </div>
             <div class="gps-scale" role="group" aria-label="Escala dos astros">
               <span>Diâmetros</span>
-              <button class="gps-button" type="button" data-gps-scale="visual" aria-pressed="true">Ampliados</button>
+              <button class="gps-button" type="button" data-gps-scale="visual" aria-pressed="true">Visualização aprimorada</button>
               <button class="gps-button" type="button" data-gps-scale="real" aria-pressed="false">Proporção real</button>
             </div>
             <div id="gps-stage" class="gps-stage">
@@ -1306,16 +1307,17 @@
               <span class="gps-scene-label gps-axis-x" data-scene-label="x" aria-hidden="true" hidden>+X</span>
               <span class="gps-scene-label gps-axis-y" data-scene-label="y" aria-hidden="true" hidden>+Y</span>
               <span class="gps-scene-label gps-axis-z" data-scene-label="z" aria-hidden="true" hidden>+Z</span>
-              <span class="gps-scene-label gps-sun" data-scene-label="sun" aria-hidden="true" hidden>Sol</span>
-              <span class="gps-scene-label gps-earth" data-scene-label="earth" aria-hidden="true" hidden>Terra</span>
-              <span class="gps-scene-label gps-mars" data-scene-label="mars" aria-hidden="true" hidden>Marte</span>
-              <p id="gps-render-error" role="status" hidden>Visualização 3D indisponível. Consulte as coordenadas e distâncias do astro.</p>
+              <button class="gps-scene-label gps-sun" type="button" data-scene-label="sun" aria-label="Centralizar Sol na cena" aria-pressed="false" hidden>Sol</button>
+              <button class="gps-scene-label gps-earth" type="button" data-scene-label="earth" aria-label="Centralizar Terra na cena" aria-pressed="false" hidden>Terra</button>
+              <button class="gps-scene-label gps-mars" type="button" data-scene-label="mars" aria-label="Centralizar Marte na cena" aria-pressed="false" hidden>Marte</button>
+              <p id="gps-render-error" role="status" hidden>Visualização 3D indisponível neste navegador. A cena requer WebGL 2.</p>
             </div>
             <figcaption>
               <span><strong>Plano XY</strong> · Origem no Sol · Malha de 0,5 ua · ICRS aproximado</span>
-              <span id="gps-scale-note">Diâmetros ampliados para leitura. Distâncias em escala linear.</span>
+              <span id="gps-scale-note">Diâmetros ampliados para leitura. Posições e distâncias em escala linear.</span>
               <span>Texturas e orientação de superfície ilustrativas.</span>
-              <span id="gps-instructions">Arraste ou use as setas para girar. Use a rolagem, a pinça ou os botões para ajustar o zoom.</span>
+              <span id="gps-texture-status" role="status" hidden></span>
+              <span id="gps-instructions">Selecione um astro pelo modelo, rótulo ou painel. Arraste ou use as setas para girar. Use a rolagem, a pinça ou os botões para ajustar o zoom.</span>
             </figcaption>
           </figure>
 
@@ -1784,6 +1786,7 @@
     <script src="assets/temporal-viewer.js"></script>
     <script src="assets/vendor/three-gps.min.js"></script>
     <script src="assets/solar-demo.js"></script>
+    <script src="assets/solar-textures.js"></script>
     <script src="assets/solar-scene.js"></script>
     <script src="assets/solar-system.js"></script>
     <script>

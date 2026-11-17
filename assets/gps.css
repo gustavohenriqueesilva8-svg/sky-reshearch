@@ -220,6 +220,7 @@ body[data-active-page="home"] .nav-tab.active {
 }
 .gps-stage canvas:active { cursor: grabbing; }
 .gps-stage canvas:focus-visible { outline-offset: -4px; }
+.gps-camera-target strong { color: var(--gps-ink); }
 .gps-scene-label {
   position: absolute;
   transform: translate(-50%, -105%);
@@ -232,6 +233,15 @@ body[data-active-page="home"] .nav-tab.active {
   font: 600 0.75rem 'JetBrains Mono', monospace;
 }
 .gps-scene-label.selected { background: #141d2d; border: 1px solid var(--body-color); }
+button.gps-scene-label {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #0a1322e0;
+}
+button.gps-scene-label:hover, button.gps-scene-label[aria-pressed="true"] {
+  border-color: var(--body-color);
+}
 .gps-axis-x { color: #dfad89; }
 .gps-axis-y { color: #83d4e2; }
 .gps-axis-z { color: #b8bcef; }

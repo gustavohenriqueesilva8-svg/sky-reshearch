@@ -81,6 +81,23 @@ class ApiTests(unittest.TestCase):
         unsupported = self.client.get(endpoint, params={"instant": "2050-01-01T00:00:00Z"})
         self.assertEqual(unsupported.status_code, 422)
 
+    def test_gps_packages_the_same_texture_maps_for_direct_file_use(self):
+        page = self.client.get("/")
+        self.assertIn('src="assets/solar-textures.js"', page.text)
+        self.assertIn('aria-label="Centralizar Marte na cena"', page.text)
+        bundle = self.client.get("/assets/solar-textures.js")
+        self.assertEqual(bundle.status_code, 200)
+        for body in ("sun", "earth", "mars"):
+            with self.subTest(body=body):
+                _, marker, data = bundle.text.partition(f'{body}: "data:image/jpeg;base64,')
+                self.assertTrue(marker, f"Missing bundled map for {body}")
+                embedded = base64.b64decode(data.split('"', 1)[0], validate=True)
+                original = self.client.get(f"/assets/solar/{body}.jpg")
+                self.assertEqual(original.status_code, 200)
+                self.assertTrue(embedded == original.content, f"Stale bundled map for {body}")
+                with Image.open(io.BytesIO(embedded)) as texture:
+                    self.assertEqual(texture.size, (1024, 512))
+
     def test_solar_system_endpoint_accepts_an_explicit_utc_cut(self):
         endpoint = "/api/ephemerides/solar-system"
         start = "2025-01-16T12:00:00Z"

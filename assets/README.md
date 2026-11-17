@@ -15,7 +15,25 @@ Para reproduzir, instale as dependências na raiz e execute `python scripts/buil
 
 ## Cena do GPS espacial
 
-Os mapas equiretangulares de Sol, Terra e Marte em `solar/` são do **Solar System Scope (INOVE)**, redimensionados a 512 × 256 e recomprimidos em JPEG. A orientação e a aparência das texturas na cena são ilustrativas. [Texturas originais](https://ssi.solarsystemscope.com/textures/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+Os mapas equiretangulares de Sol, Terra e Marte em `solar/` são do **Solar System Scope (INOVE)**, redimensionados a 1.024 × 512 e recomprimidos em JPEG. São usados nas mesmas malhas 3D nos dois modos. O Sol usa um material luminoso com o mapa da fotosfera. Terra e Marte usam materiais com iluminação e rugosidade próprias para representar oceanos, continentes e gelo terrestres e os terrenos ocres e calotas de Marte. A orientação e a fase das texturas são ilustrativas. [Texturas originais](https://ssi.solarsystemscope.com/textures/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+`solar-textures.js` empacota os mesmos JPEGs em URLs de dados para que a cena também possa texturizar os astros quando `index.html` é aberto diretamente. A partir da raiz, regenere o pacote após atualizar os mapas:
+
+```bash
+python - <<'PY'
+from base64 import b64encode
+from pathlib import Path
+
+assets = Path("assets")
+lines = ["// Generated from the credited JPEG maps in solar/. See assets/README.md.",
+         "window.gpsSolarTextures = {"]
+for body in ("sun", "earth", "mars"):
+    jpeg = (assets / "solar" / f"{body}.jpg").read_bytes()
+    lines.append(f'  {body}: "data:image/jpeg;base64,{b64encode(jpeg).decode("ascii")}",')
+lines.append("};")
+(assets / "solar-textures.js").write_text("\n".join(lines) + "\n")
+PY
+```
 
 `vendor/three-gps.min.js` contém Three.js **0.181.2** e `OrbitControls`, empacotados em formato IIFE com esbuild 0.25.12 para uso local. [Código-fonte do Three.js](https://github.com/mrdoob/three.js/tree/r181) · [Licença MIT da biblioteca](vendor/three-LICENSE.txt)
 

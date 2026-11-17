@@ -3,8 +3,8 @@
 
   const BODIES = {
     sun: { label: "Sol", color: "#ffd48b", equatorialKm: 695700, polarKm: 695700, visualRadius: 0.15, pole: [286.13, 63.87] },
-    earth: { label: "Terra", color: "#7ac8f6", equatorialKm: 6378.1, polarKm: 6356.8, visualRadius: 0.09, pole: [0, 90] },
-    mars: { label: "Marte", color: "#f59879", equatorialKm: 3396.2, polarKm: 3376.2, visualRadius: 0.048, pole: [317.27, 54.43] },
+    earth: { label: "Terra", color: "#7ac8f6", equatorialKm: 6378.1, polarKm: 6356.8, visualRadius: 0.11, pole: [0, 90] },
+    mars: { label: "Marte", color: "#f59879", equatorialKm: 3396.2, polarKm: 3376.2, visualRadius: 0.07, pole: [317.27, 54.43] },
   };
   const AXES = ["x", "y", "z"];
   const UNAVAILABLE = "Data fora da cobertura. Use um instante UTC entre 2000 e 2049.";
@@ -73,10 +73,11 @@
       readout.hidden = false;
     }
 
-    function selectBody(key) {
+    function selectBody(key, center = true) {
       selected = key;
       for (const button of bodyButtons) button.setAttribute("aria-pressed", String(button.dataset.gpsBody === key));
       scene?.select(key);
+      if (center) scene?.focus(key);
       updateReadout();
     }
 
@@ -258,8 +259,8 @@
         const scale = button.dataset.gpsScale;
         for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option === button));
         find("#gps-scale-note").textContent = scale === "real"
-          ? "Diâmetros em proporção real. Use Focalizar para ver um astro de perto."
-          : "Diâmetros ampliados para leitura. Distâncias em escala linear.";
+          ? "Diâmetros na mesma escala das distâncias. Selecione um astro para vê-lo de perto."
+          : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
         scene?.setScale(scale);
       });
     }
@@ -272,8 +273,8 @@
       start.focus();
     });
     find("#gps-reset").addEventListener("click", () => scene?.reset());
-    find("#gps-zoom-in").addEventListener("click", () => scene?.zoom(0.8));
-    find("#gps-zoom-out").addEventListener("click", () => scene?.zoom(1.25));
+    find("#gps-zoom-in").addEventListener("click", () => scene?.zoom(-0.22));
+    find("#gps-zoom-out").addEventListener("click", () => scene?.zoom(0.22));
     find("#gps-explore").addEventListener("click", () => {
       if (scene) canvas.focus();
       else clockButtons[0].focus();
@@ -293,9 +294,20 @@
         if (!initialized) {
           initialized = true;
           try {
-            scene = window.createSolarScene(stage, BODIES);
-            selectBody(selected);
-          } catch {
+            scene = window.createSolarScene(stage, BODIES, {
+              onSelect: selectBody,
+              onTarget: (key) => {
+                find("#gps-camera-target").textContent = key ? BODIES[key].label : "Sol (visão geral)";
+              },
+              onMissingTextures: (names) => {
+                const notice = find("#gps-texture-status");
+                notice.textContent = `Texturas indisponíveis para ${names.join(", ")}. Modelos exibidos com cores de referência.`;
+                notice.hidden = false;
+              },
+            });
+            selectBody(selected, false);
+          } catch (error) {
+            console.warn("Falha ao iniciar a cena 3D.", error);
             find("#gps-render-error").hidden = false;
             for (const button of root.querySelectorAll("[data-gps-camera], [data-gps-scale]")) button.disabled = true;
           }
