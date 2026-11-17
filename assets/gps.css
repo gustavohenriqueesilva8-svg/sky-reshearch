@@ -103,6 +103,15 @@ body[data-active-page="home"] .nav-tab.active {
 }
 .gps-date input { margin-top: 8px; min-width: 0; }
 .gps-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+#gps-cut-fields { display: grid; gap: 7px; margin-top: 10px; }
+#gps-cut-fields input { margin-top: 0; }
+#gps-cut-fields label:not(:first-child) { margin-top: 4px; }
+#gps-cut-fields button { justify-self: start; margin-top: 3px; }
+.gps-actions .gps-button[aria-pressed="true"], .gps-scale .gps-button[aria-pressed="true"] {
+  border-color: var(--gps-accent);
+  color: var(--gps-accent);
+  background: #302820;
+}
 #gps-status:empty { display: none; }
 #gps-status[data-state="error"] { color: #ffd08a; }
 .gps-body-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -168,6 +177,7 @@ body[data-active-page="home"] .nav-tab.active {
   font: 500 0.75rem 'JetBrains Mono', monospace;
 }
 .gps-epoch-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 9px; }
+#gps-live-state { color: #98d8bb; font-size: 0.74rem; }
 #gps-edit-date {
   display: none;
   padding: 0;
@@ -179,6 +189,16 @@ body[data-active-page="home"] .nav-tab.active {
   cursor: pointer;
 }
 .gps-camera { display: flex; gap: 6px; }
+.gps-scale {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 10px;
+  color: var(--gps-muted);
+  font-size: 0.76rem;
+}
+.gps-scale .gps-button { min-height: 31px; padding-block: 4px; font-size: 0.77rem; }
 .gps-icon-button { width: 36px; padding-inline: 0; font-size: 1.15rem; }
 .gps-stage {
   position: relative;
@@ -229,7 +249,8 @@ body[data-active-page="home"] .nav-tab.active {
 #gps-instructions { flex-basis: 100%; }
 
 .gps-time { grid-area: time; padding: 12px 14px; }
-#gps-range { font-variant-numeric: tabular-nums; }
+#gps-range { display: flex; flex-wrap: wrap; gap: 0 4px; font-variant-numeric: tabular-nums; }
+#gps-range time { white-space: nowrap; }
 #gps-timeline { display: block; width: 100%; margin: 9px 0 4px; accent-color: var(--gps-accent); }
 #gps-source:not(:empty)::before { content: " · "; }
 .gps-related { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }

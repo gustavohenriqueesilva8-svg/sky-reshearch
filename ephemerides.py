@@ -163,16 +163,31 @@ def mars_geometry(instant: str) -> MarsGeometry:
     return _geometry(utc, earth[0], mars[0])
 
 
-def solar_simulation(instant: str) -> SolarSimulation:
-    """Sample a 720-day trajectory in the same frame as mars_geometry."""
+def solar_simulation(instant: str, end: str | None = None) -> SolarSimulation:
+    """Sample a trajectory in the same frame as mars_geometry.
+
+    If end is supplied, instant and end delimit the requested interval.
+    Otherwise return the 720-day overview around instant.
+    """
     utc = _parse_instant(instant)
-    # Move the whole window near a coverage limit instead of extrapolating.
-    start = max(_START_UTC, min(utc - _TRAJECTORY_WINDOW / 2, _LAST_UTC - _TRAJECTORY_WINDOW))
+    if end is None:
+        # Move the whole window near a coverage limit instead of extrapolating.
+        start = max(_START_UTC, min(utc - _TRAJECTORY_WINDOW / 2, _LAST_UTC - _TRAJECTORY_WINDOW))
+        finish = start + _TRAJECTORY_WINDOW
+        step = _TRAJECTORY_STEP
+    else:
+        start = utc
+        finish = _parse_instant(end)
+        if finish <= start:
+            raise ValueError("The interval end must be after its start.")
+        # Keep short intervals navigable while retaining five-day spacing at most.
+        step = min(_TRAJECTORY_STEP, max(timedelta(microseconds=1), (finish - start) / 144))
+
     dates = {
-        start + step * _TRAJECTORY_STEP
-        for step in range(_TRAJECTORY_WINDOW // _TRAJECTORY_STEP + 1)
+        start + index * step
+        for index in range((finish - start) // step + 1)
     }
-    dates.add(utc)
+    dates.update((utc, finish))
     instants = sorted(dates)
     earth, mars = _positions_at(instants)
     selected = instants.index(utc)

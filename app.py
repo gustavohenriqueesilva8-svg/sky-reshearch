@@ -999,11 +999,12 @@ def get_mars_geometry(
 
 @app.get("/api/ephemerides/solar-system", response_model=None)
 def get_solar_simulation(
-    instant: str = Query(..., description="Data e hora ISO 8601 com fuso explícito."),
+    instant: str = Query(..., description="Instante consultado ou início do recorte, em ISO 8601."),
+    end: str | None = Query(None, description="Fim opcional do recorte, em ISO 8601."),
 ) -> SolarSimulation:
-    """Retorna a geometria heliocêntrica e 720 dias de amostras de Terra e Marte."""
+    """Retorna a geometria heliocêntrica e as amostras do recorte ou da janela padrão de 720 dias."""
     try:
-        return solar_simulation(instant)
+        return solar_simulation(instant, end=end)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

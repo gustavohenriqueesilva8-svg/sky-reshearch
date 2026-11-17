@@ -217,6 +217,19 @@ class MarsGeometryTests(unittest.TestCase):
         self.assertEqual(selected["earth"], simulation["geometry"]["positions"]["earth"])
         self.assertEqual(selected["mars"], simulation["geometry"]["positions"]["mars"])
 
+    def test_custom_trajectory_samples_a_short_cut_and_includes_both_ends(self) -> None:
+        start = "2025-01-16T12:00:00Z"
+        end = "2025-01-16T12:00:01Z"
+        result = solar_simulation(start, end=end)
+        samples = result["trajectory"]
+        self.assertEqual(result["geometry"], mars_geometry(start))
+        self.assertEqual(samples[0]["instant_utc"], start)
+        self.assertEqual(samples[-1]["instant_utc"], end)
+        self.assertGreater(len(samples), 100)
+        middle = samples[len(samples) // 2]
+        self.assertEqual(middle["earth"], mars_geometry(middle["instant_utc"])["positions"]["earth"])
+        self.assertEqual(samples[-1]["mars"], mars_geometry(end)["positions"]["mars"])
+
     def test_trajectory_window_stays_inside_coverage_and_keeps_distinct_planes(self) -> None:
         bounds = ("2000-01-01T00:00:00Z", "2049-12-31T23:59:59.999999Z")
         for instant in bounds:

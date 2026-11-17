@@ -1284,7 +1284,8 @@
                 <h2>Sistema Solar <span>Simulação</span></h2>
                 <div class="gps-epoch-row">
                   <time id="gps-epoch">Carregando instante…</time>
-                  <button id="gps-edit-date" type="button">Editar data</button>
+                  <span id="gps-live-state" hidden></span>
+                  <button id="gps-edit-date" type="button">Escolher recorte</button>
                 </div>
               </div>
               <div class="gps-camera" role="group" aria-label="Controles da câmera">
@@ -1292,6 +1293,11 @@
                 <button class="gps-button gps-icon-button" id="gps-zoom-out" type="button" aria-label="Afastar" data-gps-camera>−</button>
                 <button class="gps-button gps-icon-button" id="gps-zoom-in" type="button" aria-label="Aproximar" data-gps-camera>+</button>
               </div>
+            </div>
+            <div class="gps-scale" role="group" aria-label="Escala dos astros">
+              <span>Diâmetros</span>
+              <button class="gps-button" type="button" data-gps-scale="visual" aria-pressed="true">Ampliados</button>
+              <button class="gps-button" type="button" data-gps-scale="real" aria-pressed="false">Proporção real</button>
             </div>
             <div id="gps-stage" class="gps-stage">
               <canvas tabindex="0" aria-label="Cena 3D do Sistema Solar" aria-describedby="gps-instructions">
@@ -1307,31 +1313,40 @@
             </div>
             <figcaption>
               <span><strong>Plano XY</strong> · Origem no Sol · Malha de 0,5 ua · ICRS aproximado</span>
-              <span>Diâmetros ampliados e texturas ilustrativas. Distâncias em escala linear.</span>
+              <span id="gps-scale-note">Diâmetros ampliados para leitura. Distâncias em escala linear.</span>
+              <span>Texturas e orientação de superfície ilustrativas.</span>
               <span id="gps-instructions">Arraste ou use as setas para girar. Use a rolagem, a pinça ou os botões para ajustar o zoom.</span>
             </figcaption>
           </figure>
 
-          <section class="gps-panel gps-time" aria-labelledby="gps-time-title">
+          <section class="gps-panel gps-time" aria-labelledby="gps-time-title" hidden>
             <div class="gps-panel-title">
               <div>
                 <h2 id="gps-time-title"><label for="gps-timeline">Linha do tempo (UTC)</label></h2>
-                <p id="gps-range"></p>
+                <p id="gps-range">
+                  <time id="gps-range-start"></time><span aria-hidden="true">—</span><time id="gps-range-end"></time>
+                </p>
               </div>
               <button class="gps-button" id="gps-play" type="button" disabled>Reproduzir</button>
             </div>
             <input id="gps-timeline" type="range" min="0" max="0" step="1" value="0" aria-describedby="gps-sampling" disabled>
-            <p id="gps-sampling">Até 5 dias entre amostras da efeméride <span id="gps-source"></span></p>
+            <p id="gps-sampling">Posições amostradas pela efeméride <span id="gps-source"></span></p>
           </section>
 
           <div class="gps-controls">
             <form id="gps-form" class="gps-panel gps-date">
-              <label for="gps-instant">Data e hora (UTC)</label>
-              <input id="gps-instant" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="gps-coverage" required>
-              <p id="gps-coverage">Cobertura de 2000 a 2049</p>
-              <div class="gps-actions">
-                <button class="gps-primary" type="submit">Atualizar posição</button>
-                <button class="gps-button" id="gps-now" type="button">Agora</button>
+              <h2 id="gps-clock-title">Tempo da simulação</h2>
+              <div class="gps-actions" role="group" aria-labelledby="gps-clock-title">
+                <button class="gps-button" type="button" data-gps-clock="live" aria-pressed="true">Tempo real</button>
+                <button class="gps-button" type="button" data-gps-clock="range" aria-pressed="false">Recorte UTC</button>
+              </div>
+              <p id="gps-coverage">Cobertura UTC de 2000 a 2049.</p>
+              <div id="gps-cut-fields" hidden>
+                <label for="gps-instant">Início (UTC)</label>
+                <input id="gps-instant" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="gps-coverage" required>
+                <label for="gps-end">Fim (UTC)</label>
+                <input id="gps-end" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="gps-coverage" required>
+                <button class="gps-primary" type="submit">Aplicar recorte</button>
               </div>
               <p id="gps-status" role="status"></p>
             </form>
@@ -1358,6 +1373,7 @@
                 <div><dt>Z</dt><dd id="gps-coordinate-z"></dd></div>
               </dl>
               <dl class="gps-distances">
+                <div><dt>Diâmetro equatorial</dt><dd id="gps-body-diameter"></dd></div>
                 <div><dt>Distância ao Sol</dt><dd id="gps-distance-sun"></dd></div>
                 <div><dt>Distância à Terra</dt><dd id="gps-distance-earth"></dd></div>
               </dl>

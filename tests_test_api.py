@@ -81,6 +81,26 @@ class ApiTests(unittest.TestCase):
         unsupported = self.client.get(endpoint, params={"instant": "2050-01-01T00:00:00Z"})
         self.assertEqual(unsupported.status_code, 422)
 
+    def test_solar_system_endpoint_accepts_an_explicit_utc_cut(self):
+        endpoint = "/api/ephemerides/solar-system"
+        start = "2025-01-16T12:00:00Z"
+        end = "2025-01-16T18:00:00Z"
+        response = self.client.get(endpoint, params={"instant": start, "end": end})
+        self.assertEqual(response.status_code, 200)
+        path = response.json()["trajectory"]
+        self.assertEqual(path[0]["instant_utc"], start)
+        self.assertEqual(path[-1]["instant_utc"], end)
+        self.assertEqual(path[-1]["mars"], mars_geometry(end)["positions"]["mars"])
+        for invalid_end, message in (
+            (start, "end must be after"),
+            ("2025-01-01T00:00:00Z", "end must be after"),
+            ("2050-01-01T00:00:00Z", "UTC years 2000 through 2049"),
+        ):
+            with self.subTest(end=invalid_end):
+                invalid = self.client.get(endpoint, params={"instant": start, "end": invalid_end})
+                self.assertEqual(invalid.status_code, 422)
+                self.assertIn(message, invalid.json()["detail"])
+
     def test_catalog_endpoint_returns_challenge_and_famous_targets(self):
         response = self.client.get("/api/catalog")
         self.assertEqual(response.status_code, 200)
