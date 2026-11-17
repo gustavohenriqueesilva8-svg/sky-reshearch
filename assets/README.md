@@ -45,7 +45,10 @@ import json
 from pathlib import Path
 from ephemerides import solar_simulation
 
-sample = json.dumps(solar_simulation("2025-01-16T12:00:00Z"), separators=(",", ":"))
+sample = json.dumps(
+    solar_simulation("2025-01-16T12:00:00Z", include_velocities=True),
+    separators=(",", ":"),
+)
 Path("assets/solar-demo.js").write_text(
     "// Generated from ephemerides.solar_simulation. See assets/README.md.\n"
     + "window.solarDemo = " + sample + ";\n"

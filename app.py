@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from scipy.ndimage import median_filter
 
-from ephemerides import MarsGeometry, SolarSimulation, mars_geometry, solar_simulation
+from ephemerides import MarsGeometry, SolarSimulation, mars_geometry, mars_state, solar_simulation
 
 logger = logging.getLogger(__name__)
 conf.remote_timeout = 120
@@ -989,10 +989,11 @@ async def get_celestial_catalog():
 @app.get("/api/ephemerides/mars", response_model=None)
 def get_mars_geometry(
     instant: str = Query(..., description="Data e hora ISO 8601 com fuso explícito."),
+    velocities: bool = Query(False, description="Inclui velocidades heliocêntricas em km/s."),
 ) -> MarsGeometry:
     """Retorna as posições heliocêntricas e as distâncias de Marte em au."""
     try:
-        return mars_geometry(instant)
+        return mars_state(instant) if velocities else mars_geometry(instant)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -1001,10 +1002,11 @@ def get_mars_geometry(
 def get_solar_simulation(
     instant: str = Query(..., description="Instante consultado ou início do recorte, em ISO 8601."),
     end: str | None = Query(None, description="Fim opcional do recorte, em ISO 8601."),
+    velocities: bool = Query(False, description="Inclui velocidades heliocêntricas em km/s em cada amostra."),
 ) -> SolarSimulation:
     """Retorna a geometria heliocêntrica e as amostras do recorte ou da janela padrão de 720 dias."""
     try:
-        return solar_simulation(instant, end=end)
+        return solar_simulation(instant, end=end, include_velocities=velocities)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

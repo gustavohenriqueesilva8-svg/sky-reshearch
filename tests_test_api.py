@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import app
-from ephemerides import mars_geometry
+from ephemerides import mars_geometry, mars_state
 
 
 def synthetic_hdu(survey: str):
@@ -97,6 +97,20 @@ class ApiTests(unittest.TestCase):
                 self.assertTrue(embedded == original.content, f"Stale bundled map for {body}")
                 with Image.open(io.BytesIO(embedded)) as texture:
                     self.assertEqual(texture.size, (1024, 512))
+
+    def test_gps_velocity_option_matches_the_state_at_each_instant(self):
+        start = "2025-01-16T12:00:00Z"
+        end = "2025-01-16T18:00:00Z"
+        state = self.client.get("/api/ephemerides/mars", params={"instant": start, "velocities": "true"})
+        self.assertEqual(state.status_code, 200)
+        self.assertEqual(state.json(), mars_state(start))
+        cut = self.client.get(
+            "/api/ephemerides/solar-system", params={"instant": start, "end": end, "velocities": "true"}
+        )
+        self.assertEqual(cut.status_code, 200)
+        data = cut.json()
+        self.assertEqual(data["geometry"], state.json())
+        self.assertEqual(data["trajectory"][-1]["velocities_km_s"], mars_state(end)["velocities_km_s"])
 
     def test_solar_system_endpoint_accepts_an_explicit_utc_cut(self):
         endpoint = "/api/ephemerides/solar-system"

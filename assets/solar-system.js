@@ -1,10 +1,11 @@
 (() => {
   "use strict";
 
+  const physics = window.gpsPhysics;
   const BODIES = {
-    sun: { label: "Sol", color: "#ffd48b", equatorialKm: 695700, polarKm: 695700, visualRadius: 0.15, pole: [286.13, 63.87] },
-    earth: { label: "Terra", color: "#7ac8f6", equatorialKm: 6378.1, polarKm: 6356.8, visualRadius: 0.11, pole: [0, 90] },
-    mars: { label: "Marte", color: "#f59879", equatorialKm: 3396.2, polarKm: 3376.2, visualRadius: 0.07, pole: [317.27, 54.43] },
+    sun: { label: "Sol", color: "#ffd48b", ...physics.RADII_KM.sun, visualRadius: 0.15, pole: [286.13, 63.87] },
+    earth: { label: "Terra", color: "#7ac8f6", ...physics.RADII_KM.earth, visualRadius: 0.11, pole: [0, 90] },
+    mars: { label: "Marte", color: "#f59879", ...physics.RADII_KM.mars, visualRadius: 0.07, pole: [317.27, 54.43] },
   };
   const AXES = ["x", "y", "z"];
   const UNAVAILABLE = "Data fora da cobertura. Use um instante UTC entre 2000 e 2049.";
@@ -14,6 +15,7 @@
     maximumFractionDigits: 4, minimumFractionDigits: 4,
   });
   const formatDiameter = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+  const formatSpeed = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3, minimumFractionDigits: 3 });
   const formatEpoch = (instant) => instant.replace("T", " ").replace("Z", " UTC");
   const inputInstant = (value) => `${value.length === 16 ? value + ":00" : value}Z`;
 
@@ -47,6 +49,10 @@
     const play = find("#gps-play");
     const focus = find("#gps-focus");
     const free = find("#gps-free");
+    const playbackRate = find("#gps-playback-rate");
+    const referenceSelect = find("#gps-reference");
+    const speedLabels = Object.fromEntries(Object.keys(BODIES).map((body) => [body, find(`#gps-speed-${body}`)]));
+    const apparentLabel = find("#gps-apparent");
     const bodyButtons = root.querySelectorAll("[data-gps-body]");
     const clockButtons = root.querySelectorAll("[data-gps-clock]");
     const scaleButtons = root.querySelectorAll("[data-gps-scale]");
@@ -57,8 +63,13 @@
     let liveWindow = null;
     let range = null;
     let orbitExtents = {};
+    let orbitSamples = null;
     let positions = null;
+    let velocities = null;
+    let framePositions = null;
+    let apparentSizes = {};
     let selected = "mars";
+    let reference = "sun";
     let mode = "live";
     let activeRequest = null;
     let refreshTimer = null;
@@ -74,11 +85,11 @@
       find("#gps-body-name").textContent = body.label;
       focus.disabled = !scene || !positions;
       if (!positions) return;
-      const position = positions[selected];
+      const position = framePositions[selected];
       for (const axis of AXES) find(`#gps-coordinate-${axis}`).textContent = formatNumber.format(position[axis]);
       find("#gps-body-diameter").textContent = `${formatDiameter.format(2 * body.equatorialKm)} km`;
-      find("#gps-distance-sun").textContent = `${formatNumber.format(distance(position, positions.sun))} ua`;
-      find("#gps-distance-earth").textContent = `${formatNumber.format(distance(position, positions.earth))} ua`;
+      find("#gps-distance-sun").textContent = `${formatNumber.format(distance(positions[selected], positions.sun))} ua`;
+      find("#gps-distance-earth").textContent = `${formatNumber.format(distance(positions[selected], positions.earth))} ua`;
       const extent = orbitExtents[selected];
       find("#gps-orbit-extent").hidden = !extent;
       if (extent) {
@@ -88,31 +99,52 @@
       readout.hidden = false;
     }
 
+    function updateApparentSize() {
+      const pixels = apparentSizes[selected];
+      const text = pixels == null ? "—" :
+        `${pixels < 1 ? formatSpeed.format(pixels) : formatDiameter.format(pixels)} px`;
+      if (apparentLabel.textContent !== text) apparentLabel.textContent = text;
+    }
+
     function selectBody(key, center = true) {
       selected = key;
       for (const button of bodyButtons) button.setAttribute("aria-pressed", String(button.dataset.gpsBody === key));
       scene?.select(key);
       if (center) scene?.focus(key);
+      updateApparentSize();
       updateReadout();
     }
 
-    function showPositions(instant, vectors) {
-      positions = vectors;
-      showInstant(epoch, instant);
-      scene?.showPositions(positions);
+    function showFrame() {
+      if (!positions) return;
+      framePositions = physics.relativeVectors(positions, reference);
+      const frameVelocities = velocities && physics.relativeVectors(velocities, reference);
+      for (const [body, element] of Object.entries(speedLabels)) {
+        const vector = frameVelocities && frameVelocities[body];
+        element.textContent = vector ? `${formatSpeed.format(Math.hypot(vector.x, vector.y, vector.z))} km/s` : "—";
+      }
+      scene?.showPositions(framePositions, frameVelocities);
       updateReadout();
+    }
+
+    function showPositions(instant, vectors, velocityVectors) {
+      positions = vectors;
+      velocities = velocityVectors;
+      showInstant(epoch, instant);
+      showFrame();
     }
 
     function showSample(index) {
       const { trajectory, geometry } = range.data;
-      const { instant_utc, earth, mars } = trajectory[index];
+      const { instant_utc, earth, mars, velocities_km_s } = trajectory[index];
       range.index = index;
       slider.value = index;
       slider.setAttribute("aria-valuetext", formatEpoch(instant_utc));
-      showPositions(instant_utc, { sun: geometry.positions.sun, earth, mars });
+      showPositions(instant_utc, { sun: geometry.positions.sun, earth, mars }, velocities_km_s);
     }
 
     function loadOrbits(samples) {
+      orbitSamples = samples;
       orbitExtents = {};
       for (const body of ["earth", "mars"]) {
         let min = Infinity;
@@ -125,7 +157,22 @@
         }
         orbitExtents[body] = { min, max };
       }
-      scene?.loadTrajectory(samples);
+      scene?.loadTrajectory(samples, reference);
+    }
+
+    function setReference(next) {
+      if (positions) scene?.shiftReference(physics.subtract(positions[reference], positions[next]));
+      reference = next;
+      find("#gps-frame-origin").textContent = { sun: "no Sol", earth: "na Terra", mars: "em Marte" }[reference];
+      find("#gps-readout-origin").textContent = BODIES[reference].label;
+      for (const [body, label] of Object.entries(BODIES)) {
+        const track = find(`#gps-${body}-track`);
+        track.hidden = body === reference;
+        const name = body === "sun" ? "do Sol" : body === "earth" ? "da Terra" : `de ${label.label}`;
+        track.textContent = reference === "sun" ? `Órbita ${name}` : `Trajetória ${name}`;
+      }
+      if (orbitSamples) scene?.loadTrajectory(orbitSamples, reference);
+      showFrame();
     }
 
     function showRange(data, isDemo, index) {
@@ -149,6 +196,26 @@
       cancelAnimationFrame(playTimer);
       playTimer = null;
       play.textContent = "Reproduzir";
+      updateMotionClock();
+    }
+
+    function playbackSpeed() {
+      const samples = range.data.trajectory;
+      const duration = utcMilliseconds(samples.at(-1).instant_utc) - utcMilliseconds(samples[0].instant_utc);
+      return Number(playbackRate.value) * duration / PLAYBACK_DURATION_MS;
+    }
+
+    function updateMotionClock() {
+      const clock = find("#gps-movement-clock");
+      if (mode === "live") {
+        clock.textContent = "Tempo real · 1 s/s";
+      } else if (playTimer === null) {
+        clock.textContent = "Recorte pausado";
+      } else {
+        const rate = playbackSpeed();
+        const display = rate >= 86400 ? `${formatSpeed.format(rate / 86400)} dias/s` : `${formatSpeed.format(rate)} s/s`;
+        clock.textContent = `Reprodução · ${display}`;
+      }
     }
 
     function togglePlayback() {
@@ -160,7 +227,7 @@
       if (range.index === last) showSample(0);
       const sampleTimes = range.data.trajectory.map((sample) => utcMilliseconds(sample.instant_utc));
       const startTime = sampleTimes[range.index];
-      const speed = (sampleTimes[last] - sampleTimes[0]) / PLAYBACK_DURATION_MS;
+      const speed = playbackSpeed();
       const startFrame = performance.now();
       play.textContent = "Pausar";
       function advance(now) {
@@ -172,6 +239,7 @@
         else playTimer = requestAnimationFrame(advance);
       }
       playTimer = requestAnimationFrame(advance);
+      updateMotionClock();
     }
 
     function cancelRequests() {
@@ -197,7 +265,7 @@
       const controller = beginRequest();
       let delay = 1000;
       try {
-        const result = await requestApi(needsWindow ? "/ephemerides/solar-system" : "/ephemerides/mars", { instant }, {
+        const result = await requestApi(needsWindow ? "/ephemerides/solar-system" : "/ephemerides/mars", { instant, velocities: true }, {
           signal: controller.signal,
           timeoutMs: 6500,
         });
@@ -207,7 +275,7 @@
           loadOrbits(result.trajectory);
         }
         const geometry = needsWindow ? result.geometry : result;
-        showPositions(geometry.instant_utc, geometry.positions);
+        showPositions(geometry.instant_utc, geometry.positions, geometry.velocities_km_s);
         liveState.textContent = "Acompanhando o relógio UTC";
         setStatus("");
         delay = 1000 - Date.now() % 1000;
@@ -232,6 +300,7 @@
       stopPlayback();
       cancelRequests();
       mode = next;
+      updateMotionClock();
       for (const button of clockButtons) button.setAttribute("aria-pressed", String(button.dataset.gpsClock === mode));
       const isLive = mode === "live";
       find("#gps-cut-fields").hidden = isLive;
@@ -266,7 +335,7 @@
       const controller = beginRequest();
       setStatus("Calculando o recorte…", "loading");
       try {
-        const result = await requestApi("/ephemerides/solar-system", { instant, end: finish }, {
+        const result = await requestApi("/ephemerides/solar-system", { instant, end: finish, velocities: true }, {
           signal: controller.signal,
           timeoutMs: 6500,
         });
@@ -292,6 +361,17 @@
       showSample(Number(slider.value));
     });
     play.addEventListener("click", togglePlayback);
+    playbackRate.addEventListener("change", () => {
+      if (playTimer === null) return;
+      stopPlayback();
+      togglePlayback();
+    });
+    referenceSelect.addEventListener("change", () => setReference(referenceSelect.value));
+    find("#gps-show-velocities").addEventListener("change", (event) => scene?.setVelocityVisibility(event.target.checked));
+    find("#gps-curvature").addEventListener("change", (event) => {
+      find("#gps-curvature-info").hidden = !event.target.checked;
+      scene?.setCurvature(event.target.checked);
+    });
     for (const button of bodyButtons) button.addEventListener("click", () => selectBody(button.dataset.gpsBody));
     for (const button of scaleButtons) {
       button.addEventListener("click", () => {
@@ -344,6 +424,10 @@
                 const notice = find("#gps-texture-status");
                 notice.textContent = `Texturas indisponíveis para ${names.join(", ")}. Modelos exibidos com cores de referência.`;
                 notice.hidden = false;
+              },
+              onApparentSizes: (sizes) => {
+                apparentSizes = sizes;
+                updateApparentSize();
               },
             });
             selectBody(selected, false);

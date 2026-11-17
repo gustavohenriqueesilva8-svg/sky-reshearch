@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const AU_KM = 149_597_870.7;
+  const physics = window.gpsPhysics;
   const RADIANS = Math.PI / 180;
   const WHEEL_SENSITIVITY = 0.0025;
   const MIN_CLEARANCE_RADII = 0.06;
@@ -10,7 +10,7 @@
     mars: { roughness: 1, emissive: 0x6a2715, emissiveIntensity: 0.1 },
   };
 
-  window.createSolarScene = (stage, bodies, { onSelect, onTarget, onMissingTextures }) => {
+  window.createSolarScene = (stage, bodies, { onSelect, onTarget, onMissingTextures, onApparentSizes }) => {
     const THREE = window.SkyThree;
     const canvas = stage.querySelector("canvas");
     const renderError = stage.querySelector("#gps-render-error");
@@ -48,16 +48,21 @@
     }
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.4));
-    scene.add(new THREE.PointLight(0xffe7cc, 2.5, 0, 0));
+    const sunlight = new THREE.PointLight(0xffe7cc, 2.5, 0, 0);
+    scene.add(sunlight);
     const labels = Object.fromEntries(Array.from(stage.querySelectorAll("[data-scene-label]"),
       (element) => [element.dataset.sceneLabel, element]));
     const meshes = {};
     const paths = {};
+    const arrows = {};
     const textures = new THREE.TextureLoader();
     const missingTextures = new Set();
     let trackedBody = null;
     let freeReference = overview.length();
     let contextAvailable = true;
+    let velocities = null;
+    let showVelocityArrows = true;
+    let curvature = null;
 
     const cameraUp = new THREE.Vector3();
     function placeLabel(label, vector) {
@@ -95,12 +100,15 @@
       renderer.render(scene, camera);
       cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
       for (const [key, tip] of axes) placeLabel(labels[key], tip);
+      const apparentSizes = {};
       for (const [key, mesh] of Object.entries(meshes)) {
         if (mesh.visible) {
           const radius = mesh.scale.x;
-          const depth = -mesh.position.clone().applyMatrix4(camera.matrixWorldInverse).z;
-          const diameterPx = radius * stage.clientHeight * camera.projectionMatrix.elements[5] / depth;
-          const subpixel = depth > 0 && diameterPx < 1;
+          const cameraPosition = mesh.position.clone().applyMatrix4(camera.matrixWorldInverse);
+          const pixelsPerSlope = stage.clientHeight * camera.projectionMatrix.elements[5] / 2;
+          const diameterPx = physics.apparentDiameterPx(radius, -cameraPosition.z, cameraPosition.y, pixelsPerSlope);
+          apparentSizes[key] = diameterPx;
+          const subpixel = diameterPx !== null && diameterPx < 1;
           const label = labels[key];
           label.toggleAttribute("data-subpixel", subpixel);
           if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a um pixel.");
@@ -108,6 +116,7 @@
           placeLabel(label, mesh.position.clone().addScaledVector(cameraUp, radius));
         }
       }
+      onApparentSizes(apparentSizes);
     }
 
     function textureUnavailable(key) {
@@ -146,7 +155,6 @@
         textureUnavailable(key);
       }
 
-      if (key === "sun") continue;
       const path = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({
         color: body.color, transparent: true, opacity: 0.5,
       }));
@@ -154,6 +162,46 @@
       path.visible = false;
       paths[key] = path;
       scene.add(path);
+      const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, 1, body.color);
+      arrow.name = `velocity-${key}`;
+      arrow.visible = false;
+      arrows[key] = arrow;
+      scene.add(arrow);
+    }
+
+    function updateArrows() {
+      for (const [key, arrow] of Object.entries(arrows)) {
+        const vector = velocities && toWorld(velocities[key]);
+        const length = vector ? vector.length() * physics.VELOCITY_VECTOR_SCALE : 0;
+        arrow.visible = showVelocityArrows && length > 0;
+        if (!arrow.visible) continue;
+        arrow.position.copy(meshes[key].position);
+        arrow.setDirection(vector.normalize());
+        arrow.setLength(length, Math.min(0.035, length * 0.25), Math.min(0.022, length * 0.16));
+      }
+    }
+
+    function setCurvature(visible) {
+      if (visible && !curvature) {
+        const { positions, triangles, lines } = physics.curvatureSurface();
+        const vertices = new THREE.Float32BufferAttribute(positions, 3);
+        const surface = new THREE.BufferGeometry().setAttribute("position", vertices).setIndex(triangles);
+        const wire = new THREE.BufferGeometry().setAttribute("position", vertices).setIndex(lines);
+        curvature = new THREE.Group();
+        curvature.name = "schwarzschild-sun";
+        curvature.add(new THREE.Mesh(surface, new THREE.MeshBasicMaterial({
+          color: "#397ac2", transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide,
+        })));
+        curvature.add(new THREE.LineSegments(wire, new THREE.LineBasicMaterial({
+          color: "#75b7e6", transparent: true, opacity: 0.42, depthWrite: false,
+        })));
+        scene.add(curvature);
+      }
+      if (curvature) {
+        curvature.position.copy(meshes.sun.position);
+        curvature.visible = visible;
+      }
+      draw();
     }
 
     function resize() {
@@ -281,7 +329,7 @@
       const distance = offset.length();
       for (const [key, mesh] of Object.entries(meshes)) {
         const { equatorialKm, polarKm, visualRadius } = bodies[key];
-        const radius = mode === "real" ? equatorialKm / AU_KM : visualRadius;
+        const radius = mode === "real" ? equatorialKm / physics.AU_KM : visualRadius;
         mesh.scale.set(radius, radius * polarKm / equatorialKm, radius);
       }
       setMinimumDistance();
@@ -450,19 +498,38 @@
       resize,
       zoom,
       setScale,
-      loadTrajectory(samples) {
+      setCurvature,
+      setVelocityVisibility(visible) {
+        showVelocityArrows = visible;
+        updateArrows();
+        draw();
+      },
+      shiftReference(offset) {
+        if (trackedBody) return;
+        const shift = toWorld(offset);
+        camera.position.add(shift);
+        controls.target.add(shift);
+      },
+      loadTrajectory(samples, reference) {
         for (const [key, path] of Object.entries(paths)) {
           path.geometry.dispose();
-          path.geometry = new THREE.BufferGeometry().setFromPoints(samples.map((sample) => toWorld(sample[key])));
-          path.visible = true;
+          path.visible = key !== reference;
+          const points = path.visible ? samples.map((sample) => toWorld(physics.subtract(
+            sample[key] ?? physics.ZERO, sample[reference] ?? physics.ZERO
+          ))) : [];
+          path.geometry = new THREE.BufferGeometry().setFromPoints(points);
         }
       },
-      showPositions(positions) {
+      showPositions(positions, frameVelocities) {
         const pendingFocus = trackedBody && !meshes[trackedBody].visible;
         for (const [key, mesh] of Object.entries(meshes)) {
           mesh.position.copy(toWorld(positions[key]));
           mesh.visible = true;
         }
+        velocities = frameVelocities;
+        updateArrows();
+        sunlight.position.copy(meshes.sun.position);
+        if (curvature) curvature.position.copy(meshes.sun.position);
         if (pendingFocus) {
           focus(trackedBody);
           return;

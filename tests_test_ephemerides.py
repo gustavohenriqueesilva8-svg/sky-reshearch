@@ -15,14 +15,18 @@ import warnings
 
 from astropy import units as u  # type: ignore[import-untyped]
 from astropy.config import get_cache_dir, get_config_dir  # type: ignore[import-untyped]
-from astropy.coordinates import get_body_barycentric, solar_system_ephemeris  # type: ignore[import-untyped]
+from astropy.coordinates import (  # type: ignore[import-untyped]
+    get_body_barycentric,
+    get_body_barycentric_posvel,
+    solar_system_ephemeris,
+)
 from astropy.time import Time, TimeDelta  # type: ignore[import-untyped]
 from astropy.utils import data, iers  # type: ignore[import-untyped]
 from erfa import ErfaWarning  # type: ignore[import-untyped]
 
 import numpy as np
 
-from ephemerides import mars_geometry, solar_simulation
+from ephemerides import mars_geometry, mars_state, solar_simulation
 
 
 _AXES: tuple[Literal["x", "y", "z"], ...] = ("x", "y", "z")
@@ -104,6 +108,23 @@ class MarsGeometryTests(unittest.TestCase):
                 expected = (float(x), float(y), float(z))
                 for axis, component in zip(_AXES, expected, strict=True):
                     self.assertAlmostEqual(result["positions"][body][axis], component, places=12)
+
+    def test_native_velocities_use_the_same_epoch_and_heliocentric_axes(self) -> None:
+        result = mars_state(self.instant)
+        geometry = mars_geometry(self.instant)
+        self.assertEqual(result["positions"], geometry["positions"])
+        self.assertNotIn("velocities_km_s", geometry)
+        velocities = result["velocities_km_s"]
+        self.assertEqual(velocities["sun"], {"x": 0.0, "y": 0.0, "z": 0.0})
+        epoch = Time(self.instant, scale="utc").tdb
+        _, sun = get_body_barycentric_posvel("sun", epoch, ephemeris="builtin")
+        bodies: tuple[Literal["earth", "mars"], ...] = ("earth", "mars")
+        for body in bodies:
+            _, barycentric = get_body_barycentric_posvel(body, epoch, ephemeris="builtin")
+            for axis, component in zip(_AXES, (barycentric - sun).xyz.to_value(u.km / u.s), strict=True):
+                self.assertAlmostEqual(velocities[body][axis], float(component), places=12)
+        relative_speed = sqrt(sum((velocities["mars"][axis] - velocities["earth"][axis]) ** 2 for axis in _AXES))
+        self.assertAlmostEqual(relative_speed, 7.901003, places=5)
 
     def test_both_distances_use_all_three_components(self) -> None:
         result = mars_geometry(self.instant)
@@ -245,6 +266,20 @@ class MarsGeometryTests(unittest.TestCase):
         middle = samples[len(samples) // 2]
         self.assertEqual(middle["earth"], mars_geometry(middle["instant_utc"])["positions"]["earth"])
         self.assertEqual(samples[-1]["mars"], mars_geometry(end)["positions"]["mars"])
+
+    def test_cut_velocities_match_the_state_at_each_sampled_instant(self) -> None:
+        end = "2025-01-17T12:00:00Z"
+        result = solar_simulation(self.instant, end=end, include_velocities=True)
+        self.assertEqual(result["geometry"], mars_state(self.instant))
+        no_velocities = solar_simulation(self.instant, end=end)
+        self.assertNotIn("velocities_km_s", no_velocities["geometry"])
+        self.assertTrue(all("velocities_km_s" not in sample for sample in no_velocities["trajectory"]))
+        samples = result["trajectory"]
+        for sample in (samples[0], samples[len(samples) // 2], samples[-1]):
+            with self.subTest(instant=sample["instant_utc"]):
+                expected = mars_state(sample["instant_utc"])
+                self.assertEqual(sample["velocities_km_s"], expected["velocities_km_s"])
+                self.assertEqual(sample["mars"], expected["positions"]["mars"])
 
     def test_trajectory_window_stays_inside_coverage_and_keeps_distinct_planes(self) -> None:
         bounds = ("2000-01-01T00:00:00Z", "2049-12-31T23:59:59.999999Z")

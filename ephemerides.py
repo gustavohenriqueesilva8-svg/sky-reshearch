@@ -8,13 +8,14 @@ from typing import Literal, TypeAlias, TypedDict
 import warnings
 
 from astropy import units as u  # type: ignore[import-untyped]
-from astropy.coordinates import CartesianRepresentation, get_body_barycentric  # type: ignore[import-untyped]
+from astropy.coordinates import CartesianRepresentation, get_body_barycentric_posvel  # type: ignore[import-untyped]
 from astropy.time import Time  # type: ignore[import-untyped]
 from astropy.utils import iers  # type: ignore[import-untyped]
 from erfa import ErfaWarning  # type: ignore[import-untyped]
 
 
 Vector3D: TypeAlias = tuple[float, float, float]
+StateVector: TypeAlias = tuple[Vector3D, Vector3D]
 
 
 class Position(TypedDict):
@@ -39,7 +40,11 @@ class Frame(TypedDict):
     axes: Literal["ICRS"]
 
 
-class MarsGeometry(TypedDict):
+class VelocityFields(TypedDict, total=False):
+    velocities_km_s: Positions
+
+
+class MarsGeometry(VelocityFields):
     instant_utc: str
     length_unit: Literal["au"]
     frame: Frame
@@ -48,7 +53,7 @@ class MarsGeometry(TypedDict):
     distances: Distances
 
 
-class OrbitSample(TypedDict):
+class OrbitSample(VelocityFields):
     instant_utc: str
     earth: Position
     mars: Position
@@ -66,6 +71,7 @@ _END_UTC = datetime(2050, 1, 1, tzinfo=timezone.utc)
 _LAST_UTC = _END_UTC - timedelta(microseconds=1)
 _TRAJECTORY_WINDOW = timedelta(days=720)
 _TRAJECTORY_STEP = timedelta(days=5)
+_ZERO_VECTOR: Vector3D = (0.0, 0.0, 0.0)
 _TIMESTAMP = re.compile(
     r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})"
     r"(?:\.([0-9]{1,6}))?(Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])"
@@ -93,15 +99,22 @@ def _parse_instant(instant: str) -> datetime:
     return utc
 
 
-def _heliocentric_vectors(
-    body: Literal["earth", "mars"], epoch: Time, sun_barycentric: CartesianRepresentation
-) -> list[Vector3D]:
-    barycentric = get_body_barycentric(body, epoch, ephemeris=_EPHEMERIS)
-    x, y, z = (barycentric - sun_barycentric).xyz.to_value(u.au)
+def _vectors_in_units(representation: CartesianRepresentation, unit: u.UnitBase) -> list[Vector3D]:
+    x, y, z = representation.xyz.to_value(unit)
     return [
         (float(x_value), float(y_value), float(z_value))
         for x_value, y_value, z_value in zip(x, y, z, strict=True)
     ]
+
+
+def _heliocentric_states(
+    body: Literal["earth", "mars"], epoch: Time,
+    sun_position: CartesianRepresentation, sun_velocity: CartesianRepresentation,
+) -> list[StateVector]:
+    position, velocity = get_body_barycentric_posvel(body, epoch, ephemeris=_EPHEMERIS)
+    positions = _vectors_in_units(position - sun_position, u.au)
+    velocities = _vectors_in_units(velocity - sun_velocity, u.km / u.s)
+    return list(zip(positions, velocities, strict=True))
 
 
 def _position(vector: Vector3D) -> Position:
@@ -109,7 +122,7 @@ def _position(vector: Vector3D) -> Position:
     return {"x": x, "y": y, "z": z}
 
 
-def _positions_at(instants: list[datetime]) -> tuple[list[Vector3D], list[Vector3D]]:
+def _states_at(instants: list[datetime]) -> tuple[list[StateVector], list[StateVector]]:
     # Astropy's IERS settings are process-global. Serialize this temporary
     # configuration across calls, including the first leap-second table check.
     with (
@@ -122,31 +135,33 @@ def _positions_at(instants: list[datetime]) -> tuple[list[Vector3D], list[Vector
         warnings.filterwarnings("ignore", message=r".*dubious year.*", category=ErfaWarning)
         epoch = Time(instants, scale="utc").tdb
 
-    sun_barycentric = get_body_barycentric("sun", epoch, ephemeris=_EPHEMERIS)
+    sun_position, sun_velocity = get_body_barycentric_posvel("sun", epoch, ephemeris=_EPHEMERIS)
     return (
-        _heliocentric_vectors("earth", epoch, sun_barycentric),
-        _heliocentric_vectors("mars", epoch, sun_barycentric),
+        _heliocentric_states("earth", epoch, sun_position, sun_velocity),
+        _heliocentric_states("mars", epoch, sun_position, sun_velocity),
     )
 
 
 def _geometry(utc: datetime, earth: Vector3D, mars: Vector3D) -> MarsGeometry:
-    sun: Vector3D = (0.0, 0.0, 0.0)
-
     return {
         "instant_utc": utc.isoformat().replace("+00:00", "Z"),
         "length_unit": "au",
         "frame": {"origin": "sun", "axes": "ICRS"},
         "model": "astropy:builtin",
         "positions": {
-            "sun": _position(sun),
+            "sun": _position(_ZERO_VECTOR),
             "earth": _position(earth),
             "mars": _position(mars),
         },
         "distances": {
             "mars_earth": dist(mars, earth),
-            "mars_sun": dist(mars, sun),
+            "mars_sun": dist(mars, _ZERO_VECTOR),
         },
     }
+
+
+def _velocities(earth: StateVector, mars: StateVector) -> Positions:
+    return {"sun": _position(_ZERO_VECTOR), "earth": _position(earth[1]), "mars": _position(mars[1])}
 
 
 def mars_geometry(instant: str) -> MarsGeometry:
@@ -159,15 +174,27 @@ def mars_geometry(instant: str) -> MarsGeometry:
     alignment and preserves the native vector convention without a rotation.
     """
     utc = _parse_instant(instant)
-    earth, mars = _positions_at([utc])
-    return _geometry(utc, earth[0], mars[0])
+    earth, mars = _states_at([utc])
+    return _geometry(utc, earth[0][0], mars[0][0])
 
 
-def solar_simulation(instant: str, end: str | None = None) -> SolarSimulation:
+def mars_state(instant: str) -> MarsGeometry:
+    """Return geometric positions and native heliocentric velocities in km/s."""
+    utc = _parse_instant(instant)
+    earth, mars = _states_at([utc])
+    result = _geometry(utc, earth[0][0], mars[0][0])
+    result["velocities_km_s"] = _velocities(earth[0], mars[0])
+    return result
+
+
+def solar_simulation(
+    instant: str, end: str | None = None, *, include_velocities: bool = False
+) -> SolarSimulation:
     """Sample a trajectory in the same frame as mars_geometry.
 
     If end is supplied, instant and end delimit the requested interval.
     Otherwise return the 720-day overview around instant.
+    With include_velocities, each sample includes native heliocentric km/s vectors.
     """
     utc = _parse_instant(instant)
     if end is None:
@@ -189,16 +216,19 @@ def solar_simulation(instant: str, end: str | None = None) -> SolarSimulation:
     }
     dates.update((utc, finish))
     instants = sorted(dates)
-    earth, mars = _positions_at(instants)
+    earth, mars = _states_at(instants)
     selected = instants.index(utc)
-    return {
-        "geometry": _geometry(utc, earth[selected], mars[selected]),
-        "trajectory": [
-            {
-                "instant_utc": date.isoformat().replace("+00:00", "Z"),
-                "earth": _position(earth_vector),
-                "mars": _position(mars_vector),
-            }
-            for date, earth_vector, mars_vector in zip(instants, earth, mars, strict=True)
-        ],
-    }
+    geometry = _geometry(utc, earth[selected][0], mars[selected][0])
+    if include_velocities:
+        geometry["velocities_km_s"] = _velocities(earth[selected], mars[selected])
+    trajectory: list[OrbitSample] = []
+    for date, earth_sample, mars_sample in zip(instants, earth, mars, strict=True):
+        sample: OrbitSample = {
+            "instant_utc": date.isoformat().replace("+00:00", "Z"),
+            "earth": _position(earth_sample[0]),
+            "mars": _position(mars_sample[0]),
+        }
+        if include_velocities:
+            sample["velocities_km_s"] = _velocities(earth_sample, mars_sample)
+        trajectory.append(sample)
+    return {"geometry": geometry, "trajectory": trajectory}
