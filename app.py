@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from scipy.ndimage import median_filter
 
-from ephemerides import MarsGeometry, mars_geometry
+from ephemerides import MarsGeometry, SolarSimulation, mars_geometry, solar_simulation
 
 logger = logging.getLogger(__name__)
 conf.remote_timeout = 120
@@ -993,6 +993,17 @@ def get_mars_geometry(
     """Retorna as posições heliocêntricas e as distâncias de Marte em au."""
     try:
         return mars_geometry(instant)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/ephemerides/solar-system", response_model=None)
+def get_solar_simulation(
+    instant: str = Query(..., description="Data e hora ISO 8601 com fuso explícito."),
+) -> SolarSimulation:
+    """Retorna a geometria heliocêntrica e 720 dias de amostras de Terra e Marte."""
+    try:
+        return solar_simulation(instant)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

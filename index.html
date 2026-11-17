@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sky Researcher · O que mudou no céu?</title>
+    <title>Sky Researcher · GPS espacial</title>
+    <meta name="description" content="GPS espacial para explorar posições e trajetórias de astros.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Overpass:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -156,34 +157,6 @@
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-      }
-
-      .brand-title-wrap h1 {
-        margin: 0;
-        font-size: 1.24rem;
-        font-weight: 800;
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .brand-tag {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        padding: 3px 9px;
-        border-radius: var(--radius-pill);
-        background: var(--neon-yellow);
-        color: #040814;
-      }
-
-      .subtitle {
-        margin: 2px 0 0;
-        color: var(--text-muted);
-        font-size: 0.78rem;
       }
 
       .header-controls {
@@ -351,190 +324,21 @@
         box-shadow: 0 12px 32px rgba(230, 255, 0, 0.45);
       }
 
-      .welcome-hero .btn-neon {
-        color: var(--neon-yellow) !important;
-        background: rgba(230, 255, 0, 0.08) !important;
-        border: 1px solid rgba(230, 255, 0, 0.52) !important;
-        backdrop-filter: blur(18px) saturate(170%);
-        -webkit-backdrop-filter: blur(18px) saturate(170%);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 24px rgba(0, 0, 0, 0.2);
-      }
-
-      .welcome-hero .btn-neon:hover:not(:disabled) {
-        color: #040814 !important;
-        background: rgba(230, 255, 0, 0.9) !important;
-        box-shadow: 0 12px 32px rgba(230, 255, 0, 0.35);
-      }
-
-      /* =====================================================================
-         PÁGINA INICIAL: BOAS-VINDAS & GUIA INTERATIVO (PADRÃO AO ABRIR)
-         ===================================================================== */
-      .welcome-hero {
-        max-width: 1120px;
-        margin: 0 auto 22px;
-        padding: clamp(28px, 4.5vw, 54px);
-        border-radius: var(--radius-xl);
-        background:
-          radial-gradient(circle at 86% 18%, rgba(230, 255, 0, 0.16), transparent 36%),
-          radial-gradient(circle at 76% 84%, rgba(37, 184, 255, 0.25), transparent 46%),
-          linear-gradient(135deg, rgba(16, 34, 74, 0.62) 0%, rgba(7, 15, 36, 0.78) 100%);
-        backdrop-filter: blur(28px) saturate(190%);
-        -webkit-backdrop-filter: blur(28px) saturate(190%);
-        border: 1px solid rgba(140, 200, 255, 0.32);
-        border-top-color: rgba(255, 255, 255, 0.35);
-        box-shadow: var(--shadow-glass);
-        display: grid;
-        grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr);
-        align-items: center;
-        gap: clamp(18px, 4vw, 52px);
-      }
-
-      .welcome-targets-wrap {
-        max-width: 1120px;
-        margin: 0 auto 20px;
-        padding: clamp(16px, 3vw, 28px);
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin: 0 0 16px;
-        padding: 5px 14px;
-        border-radius: var(--radius-pill);
-        background: rgba(27, 92, 255, 0.28);
-        border: 1px solid rgba(37, 184, 255, 0.45);
-        color: var(--neon-yellow);
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.72rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-
-      .welcome-hero h2 {
-        margin: 0 0 14px;
-        color: #ffffff;
-        font-size: clamp(2.4rem, 5vw, 4.25rem);
-        line-height: 1.02;
-        letter-spacing: -0.038em;
-      }
-
-      .welcome-hero p.lead {
-        max-width: 740px;
-        margin: 0 0 22px;
-        color: #d0e2ff;
-        font-size: 1.04rem;
-        line-height: 1.62;
-      }
-
-      .welcome-section-label, .comparison-kicker {
+      .comparison-kicker {
         margin: 0 0 8px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.74rem;
-        font-weight: 600;
-        text-transform: uppercase;
+        font: 600 0.74rem 'JetBrains Mono', monospace;
         letter-spacing: 0.1em;
+        text-transform: uppercase;
         color: var(--sky-cyan);
       }
 
-      .welcome-targets-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-        gap: 14px;
-      }
-
-      .welcome-target-card {
-        background: linear-gradient(145deg, rgba(219, 237, 255, 0.1), rgba(14, 28, 62, 0.4));
-        backdrop-filter: blur(22px) saturate(170%);
-        -webkit-backdrop-filter: blur(22px) saturate(170%);
-        border: 1px solid var(--glass-border);
-        border-top-color: rgba(255, 255, 255, 0.24);
-        border-radius: 18px;
-        padding: 16px;
-        cursor: pointer;
-        text-align: left;
-        color: var(--text-main);
-        transition: border-color 0.2s ease, background 0.2s ease;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-      }
-
-      .welcome-target-card:hover {
-        border-color: var(--neon-yellow);
-        background: rgba(27, 92, 255, 0.25);
-      }
-
-      .welcome-target-card strong {
-        font-family: 'Fira Sans', sans-serif;
-        font-size: 1rem;
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-      }
-
-      .welcome-target-card span {
-        font-size: 0.87rem;
-        color: var(--text-muted);
-        line-height: 1.45;
-      }
-
-      .welcome-target-card .target-card-action {
-        margin-top: 7px;
-        color: var(--sky-cyan);
-        font-weight: 700;
-      }
-
-      .home-preview {
-        margin: 0;
-        border: 1px solid var(--glass-border);
-        border-radius: 16px;
-        padding: 10px;
-        background: rgba(3, 7, 18, 0.8);
-      }
-
-      .home-preview-frames {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
-      }
-
-      .home-preview img {
-        display: block;
-        width: 100%;
-        height: auto;
-        aspect-ratio: 1;
-        border-radius: 8px;
-      }
-
-      .home-preview-epoch { position: relative; min-width: 0; }
-      .home-preview-epoch span {
-        position: absolute;
-        left: 7px;
-        bottom: 7px;
-        padding: 3px 8px;
-        border: 1px solid var(--glass-border);
-        border-radius: 6px;
-        background: #07122b;
-        color: var(--text-main);
-        font: 600 0.78rem 'JetBrains Mono', monospace;
-      }
-
-      .home-preview figcaption, .home-quiet, .comparison-note {
+      .comparison-note {
         color: var(--text-muted);
         font-size: 0.83rem;
         line-height: 1.5;
       }
-      .home-preview figcaption { padding: 9px 3px 1px; }
-      .home-quiet { margin: 12px 0 0; }
+
       .home-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-      .home-steps { margin: 0 0 19px; padding: 0; list-style: none; display: flex; gap: 6px 15px; flex-wrap: wrap; }
-      .home-steps li { color: #d0e2ff; font-size: 0.88rem; }
-      .home-steps b { color: var(--sky-cyan); margin-right: 4px; }
 
       .guide-steps-grid {
         display: grid;
@@ -1352,64 +1156,6 @@
         font-size: 0.82rem;
       }
 
-      /* Sistema Solar */
-      .solar-heading { margin: 0 0 18px; }
-      .solar-heading h2 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.15rem); }
-      .solar-heading p { margin: 6px 0 0; color: var(--text-muted); }
-
-      .solar-layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
-        grid-template-areas: "plot controls" "plot readout";
-        grid-template-rows: auto 1fr;
-        align-items: start;
-        gap: 16px;
-      }
-
-      .solar-controls { grid-area: controls; padding: 18px; }
-      .solar-controls label { display: grid; gap: 6px; font-weight: 700; }
-      .solar-controls input { min-width: 0; }
-      .solar-controls .starmap-tools { gap: 8px; margin-bottom: 0; }
-      .solar-controls .map-filter { padding: 9px 14px; }
-      .solar-controls p { margin: 8px 0 0; color: var(--text-muted); font-size: 0.82rem; }
-      #solar-status[data-state="error"] { color: var(--accent-amber); }
-      #solar-status:empty { display: none; }
-
-      .solar-plot { grid-area: plot; margin: 0; padding: 16px; min-width: 0; }
-      .solar-plot .map-view-switch { margin-bottom: 10px; }
-      #solar-canvas {
-        display: block;
-        width: 100%;
-        height: clamp(280px, 47vw, 465px);
-        border: 1px solid var(--glass-border);
-        border-radius: 14px;
-        background: radial-gradient(ellipse at center, #102345, #040a19 75%);
-      }
-      .solar-plot figcaption, .solar-model {
-        margin: 10px 0 0;
-        color: var(--text-muted);
-        font-size: 0.8rem;
-        line-height: 1.5;
-      }
-      .solar-legend { margin-top: 10px; }
-      .solar-legend .sun-dot { background: #ffd078; }
-      .solar-legend .earth-dot { background: #68c9ff; }
-      .solar-legend .mars-dot { background: #ff9379; }
-
-      .solar-readout { grid-area: readout; min-width: 0; padding: 18px; }
-      .solar-readout h3 { margin: 0; }
-      #solar-epoch { display: block; margin-top: 4px; color: var(--text-muted); font-size: 0.76rem; }
-      .solar-distances { margin: 10px 0 0; }
-      .solar-distances div { padding: 10px 0; border-bottom: 1px solid var(--glass-border); }
-      .solar-distances dt { color: var(--text-muted); font-size: 0.86rem; }
-      .solar-distances dd { margin: 3px 0 0; font-size: 1.45rem; font-weight: 700; }
-      .solar-readout details { margin-top: 14px; font-size: 0.8rem; }
-      .solar-readout summary { cursor: pointer; }
-      .solar-readout table { width: 100%; margin-top: 8px; border-collapse: collapse; }
-      .solar-readout th, .solar-readout td { padding: 5px 3px; border-bottom: 1px solid var(--glass-border); }
-      .solar-readout tbody th, .solar-readout thead th:first-child { text-align: left; }
-      .solar-readout td { text-align: right; font-variant-numeric: tabular-nums; }
-
       /* Espectro */
       .spectrum-page-grid {
         display: grid;
@@ -1466,13 +1212,8 @@
       }
 
       @media (max-width: 800px) {
-        .welcome-hero, .comparison-layout.has-temporal-result { grid-template-columns: 1fr; }
-        .home-preview { max-width: 430px; }
+        .comparison-layout.has-temporal-result { grid-template-columns: 1fr; }
         .investigation-header h2 { scroll-margin-top: 12px; }
-        .solar-layout {
-          grid-template-columns: minmax(0, 1fr);
-          grid-template-areas: "controls" "plot" "readout";
-        }
       }
 
       @media (max-width: 560px) {
@@ -1481,44 +1222,36 @@
         .image-mode-selector {
           grid-template-columns: 1fr;
         }
-        .welcome-hero { padding: 26px 18px; }
         .main-viewport-card { padding: 12px; }
         .viewer-stage { min-height: 235px; padding: 10px; }
-        .welcome-hero h2 { font-size: clamp(1.8rem, 9vw, 2.4rem); }
       }
 
       @media (prefers-reduced-motion: reduce) {
         .page-view, .spinner { animation: none; }
-        .action-btn, .welcome-target-card { transition: none; }
+        .action-btn { transition: none; }
       }
     </style>
+    <link rel="stylesheet" href="assets/gps.css">
   </head>
-  <body data-ui-mode="simple">
+  <body data-ui-mode="simple" data-active-page="home">
 
     <!-- CABEÇALHO GLASSMORPHISM SEM EMOJIS -->
     <header class="app-header">
-      <div class="app-brand" onclick="switchPage('home')" title="Ir para a página inicial">
+      <button class="app-brand" type="button" data-page-link="home">
         <div class="spaceapps-emblem" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#E6FF00"/>
             <circle cx="12" cy="12" r="9" stroke="#25B8FF" stroke-width="1.3" stroke-dasharray="3 3"/>
           </svg>
         </div>
-        <div class="brand-title-wrap">
-          <h1>
-            Sky Researcher
-            <span class="brand-tag">Planet X & SPHEREx</span>
-          </h1>
-          <p class="subtitle">Exploração Espacial Interativa · NASA Space Apps Challenge 2026</p>
-        </div>
-      </div>
+        <span class="brand-title">Sky Researcher</span>
+      </button>
 
       <div class="header-controls">
         <nav class="top-nav" aria-label="Navegação principal">
-          <button class="nav-tab active" data-page="home" type="button">Boas-vindas</button>
-          <button class="nav-tab" data-page="workbench" type="button">Explorar Céu</button>
+          <button class="nav-tab active" data-page="home" type="button">GPS espacial</button>
           <button class="nav-tab" data-page="starmap" type="button">Mapa Estelar</button>
-          <button class="nav-tab" data-page="solar-system" type="button">Sistema Solar</button>
+          <button class="nav-tab" data-page="workbench" type="button">Comparador</button>
           <button class="nav-tab" data-page="spectrum" type="button">Espectro</button>
         </nav>
 
@@ -1535,58 +1268,107 @@
       <!-- Banner de Notificação / Failover Automático de Banco de Dados -->
       <div id="system-notice" role="status" aria-live="polite"></div>
 
-      <!-- ===================================================================
-           PÁGINA 1 (INICIAL PADRÃO): BOAS-VINDAS & GUIA DE EXPLORAÇÃO
-           =================================================================== -->
       <section id="page-home" class="page-view active" aria-labelledby="home-title">
-        <div class="welcome-hero">
+        <header class="gps-intro">
           <div>
-            <p class="eyebrow">GPS espacial aberto · Primeira missão</p>
-            <h2 id="home-title">O que mudou no céu?</h2>
-            <p class="lead">Compare duas imagens reais da mesma região. Comece com a Estrela de Barnard e descubra se ela aparece no mesmo lugar mais de 40 anos depois.</p>
-            <ol class="home-steps" aria-label="Como explorar">
-              <li><b>01</b> Escolha um alvo</li>
-              <li><b>02</b> Alterne as épocas</li>
-              <li><b>03</b> Compare com as estrelas vizinhas</li>
-            </ol>
-            <div class="home-actions">
-              <button class="action-btn btn-neon" type="button" data-investigate-target="barnard">Comparar a Estrela de Barnard</button>
-              <button class="action-btn" type="button" data-page-link="starmap">Procurar outro alvo no mapa</button>
-              <button class="action-btn" type="button" data-page-link="solar-system">Localizar Marte</button>
-            </div>
-            <p class="home-quiet">Exemplo guiado com imagens de arquivo incluídas no aplicativo.</p>
+            <h1 id="home-title">GPS espacial</h1>
+            <p>Localize astros, acompanhe suas trajetórias e veja como suas posições mudam com o tempo.</p>
           </div>
-          <figure class="home-preview">
-            <div class="home-preview-frames">
-              <div class="home-preview-epoch">
-                <img src="assets/barnard-1950.png" width="600" height="600" alt="Campo da Estrela de Barnard na placa óptica de 1950">
-                <span>1950</span>
+          <button id="gps-explore" class="gps-primary" type="button">Explorar em 3D <span aria-hidden="true">↓</span></button>
+        </header>
+
+        <div class="gps-layout">
+          <figure class="gps-panel gps-scene">
+            <div class="gps-scene-header">
+              <div>
+                <h2>Sistema Solar <span>Simulação</span></h2>
+                <div class="gps-epoch-row">
+                  <time id="gps-epoch">Carregando instante…</time>
+                  <button id="gps-edit-date" type="button">Editar data</button>
+                </div>
               </div>
-              <div class="home-preview-epoch">
-                <img src="assets/barnard-1991.png" width="600" height="600" alt="Mesmo campo na placa óptica de 1991">
-                <span>1991</span>
+              <div class="gps-camera" role="group" aria-label="Controles da câmera">
+                <button class="gps-button" id="gps-reset" type="button" data-gps-camera>Visão geral</button>
+                <button class="gps-button gps-icon-button" id="gps-zoom-out" type="button" aria-label="Afastar" data-gps-camera>−</button>
+                <button class="gps-button gps-icon-button" id="gps-zoom-in" type="button" aria-label="Aproximar" data-gps-camera>+</button>
               </div>
             </div>
-            <figcaption>Mesmo campo, cerca de 41 anos de diferença. Digitized Sky Survey, via ESO.</figcaption>
+            <div id="gps-stage" class="gps-stage">
+              <canvas tabindex="0" aria-label="Cena 3D do Sistema Solar" aria-describedby="gps-instructions">
+                Consulte as posições e distâncias na seção do astro selecionado.
+              </canvas>
+              <span class="gps-scene-label gps-axis-x" data-scene-label="x" aria-hidden="true" hidden>+X</span>
+              <span class="gps-scene-label gps-axis-y" data-scene-label="y" aria-hidden="true" hidden>+Y</span>
+              <span class="gps-scene-label gps-axis-z" data-scene-label="z" aria-hidden="true" hidden>+Z</span>
+              <span class="gps-scene-label gps-sun" data-scene-label="sun" aria-hidden="true" hidden>Sol</span>
+              <span class="gps-scene-label gps-earth" data-scene-label="earth" aria-hidden="true" hidden>Terra</span>
+              <span class="gps-scene-label gps-mars" data-scene-label="mars" aria-hidden="true" hidden>Marte</span>
+              <p id="gps-render-error" role="status" hidden>Visualização 3D indisponível. Consulte as coordenadas e distâncias do astro.</p>
+            </div>
+            <figcaption>
+              <span><strong>Plano XY</strong> · Origem no Sol · Malha de 0,5 ua · ICRS aproximado</span>
+              <span>Diâmetros ampliados e texturas ilustrativas. Distâncias em escala linear.</span>
+              <span id="gps-instructions">Arraste ou use as setas para girar. Use a rolagem, a pinça ou os botões para ajustar o zoom.</span>
+            </figcaption>
           </figure>
+
+          <section class="gps-panel gps-time" aria-labelledby="gps-time-title">
+            <div class="gps-panel-title">
+              <div>
+                <h2 id="gps-time-title"><label for="gps-timeline">Linha do tempo (UTC)</label></h2>
+                <p id="gps-range"></p>
+              </div>
+              <button class="gps-button" id="gps-play" type="button" disabled>Reproduzir</button>
+            </div>
+            <input id="gps-timeline" type="range" min="0" max="0" step="1" value="0" aria-describedby="gps-sampling" disabled>
+            <p id="gps-sampling">Até 5 dias entre amostras da efeméride <span id="gps-source"></span></p>
+          </section>
+
+          <div class="gps-controls">
+            <form id="gps-form" class="gps-panel gps-date">
+              <label for="gps-instant">Data e hora (UTC)</label>
+              <input id="gps-instant" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="gps-coverage" required>
+              <p id="gps-coverage">Cobertura de 2000 a 2049</p>
+              <div class="gps-actions">
+                <button class="gps-primary" type="submit">Atualizar posição</button>
+                <button class="gps-button" id="gps-now" type="button">Agora</button>
+              </div>
+              <p id="gps-status" role="status"></p>
+            </form>
+
+            <section class="gps-panel gps-targets" aria-labelledby="gps-targets-title">
+              <h2 id="gps-targets-title">Astros da simulação</h2>
+              <div class="gps-body-options" role="group" aria-labelledby="gps-targets-title">
+                <button class="gps-button gps-sun" data-gps-body="sun" type="button" aria-pressed="false">Sol</button>
+                <button class="gps-button gps-earth" data-gps-body="earth" type="button" aria-pressed="false">Terra</button>
+                <button class="gps-button gps-mars" data-gps-body="mars" type="button" aria-pressed="true">Marte</button>
+              </div>
+              <p>Os demais corpos do Sistema Solar estão fora da cobertura.</p>
+            </section>
+
+            <section id="gps-readout" class="gps-panel gps-readout" aria-labelledby="gps-body-name" hidden>
+              <div class="gps-panel-title">
+                <h2 id="gps-body-name">Marte</h2>
+                <button id="gps-focus" class="gps-button" type="button" disabled>Focalizar</button>
+              </div>
+              <p>Posição heliocêntrica (ua)</p>
+              <dl class="gps-coordinates">
+                <div><dt>X</dt><dd id="gps-coordinate-x"></dd></div>
+                <div><dt>Y</dt><dd id="gps-coordinate-y"></dd></div>
+                <div><dt>Z</dt><dd id="gps-coordinate-z"></dd></div>
+              </dl>
+              <dl class="gps-distances">
+                <div><dt>Distância ao Sol</dt><dd id="gps-distance-sun"></dd></div>
+                <div><dt>Distância à Terra</dt><dd id="gps-distance-earth"></dd></div>
+              </dl>
+            </section>
+          </div>
         </div>
 
-        <section class="glass-surface welcome-targets-wrap" aria-labelledby="other-targets-title">
-          <h3 class="welcome-section-label" id="other-targets-title">Outras perguntas para explorar</h3>
-          <p class="home-quiet" style="margin:0 0 14px;">As consultas ao vivo dependem da cobertura do alvo e da disponibilidade dos arquivos.</p>
-          <div class="welcome-targets-grid">
-            <button type="button" class="welcome-target-card" data-investigate-target="rwaurigae">
-              <strong>RW Aurigae</strong>
-              <span>A estrela chama mais atenção em um quadro do que no outro? Compare a aparência com a das vizinhas.</span>
-              <span class="target-card-action">Buscar duas épocas no SPHEREx →</span>
-            </button>
-            <button type="button" class="welcome-target-card" data-investigate-target="rdraconis">
-              <strong>R Draconis</strong>
-              <span>Duas observações de uma estrela variável mostram a mesma aparência? Confira as datas antes de comparar.</span>
-              <span class="target-card-action">Buscar duas épocas no SPHEREx →</span>
-            </button>
-          </div>
-        </section>
+        <div class="gps-related" aria-label="Mais formas de explorar o céu">
+          <button class="gps-button" type="button" data-page-link="starmap">Buscar no Mapa Estelar</button>
+          <button class="gps-button" type="button" data-investigate-target="barnard">Comparar a Estrela de Barnard</button>
+        </div>
       </section>
 
       <!-- ===================================================================
@@ -1861,7 +1643,7 @@
               <p style="margin:4px 0 0; color:var(--text-muted); font-size:0.84rem;">Localize objetos da Via Láctea e veja em que direção aparecem e a que distância aproximada estão da Terra.</p>
             </div>
             <div class="starmap-tools">
-              <button class="action-btn" type="button" data-page-link="solar-system">Localizar Marte</button>
+              <button class="action-btn" type="button" data-page-link="home" data-gps-target="mars">Localizar Marte</button>
               <button class="action-btn btn-neon" type="button" data-page-link="workbench">Voltar ao Visor</button>
             </div>
           </div>
@@ -1933,58 +1715,6 @@
         </div>
       </section>
 
-      <section id="page-solar-system" class="page-view" aria-labelledby="solar-title">
-        <header class="solar-heading">
-          <h2 id="solar-title">Onde está Marte?</h2>
-          <p>Escolha um instante para ver a posição de Marte e da Terra em relação ao Sol.</p>
-        </header>
-        <div class="solar-layout">
-          <form id="solar-form" class="glass-surface solar-controls">
-            <label for="solar-instant">Data e hora (UTC)
-              <input id="solar-instant" type="datetime-local" min="2000-01-01T00:00" max="2049-12-31T23:59:59" step="1" aria-describedby="solar-date-range" required>
-            </label>
-            <p id="solar-date-range">De 1 jan. 2000 a 31 dez. 2049.</p>
-            <div class="starmap-tools">
-              <button class="action-btn btn-neon" type="submit">Atualizar posição</button>
-              <button id="solar-now" class="map-filter" type="button">Agora</button>
-            </div>
-            <p id="solar-status" role="status"></p>
-          </form>
-
-          <figure class="glass-surface solar-plot">
-            <div class="map-view-switch" role="group" aria-label="Projeção do Sistema Solar">
-              <button class="map-filter active" type="button" data-solar-view="tilted" aria-pressed="true">Vista inclinada</button>
-              <button class="map-filter" type="button" data-solar-view="xy" aria-pressed="false">Plano XY</button>
-              <button class="map-filter" type="button" data-solar-view="xz" aria-pressed="false">Plano XZ</button>
-            </div>
-            <canvas id="solar-canvas" role="img" aria-label="Posições do Sol, da Terra e de Marte" aria-describedby="solar-caption">As posições e distâncias podem ser consultadas na tabela e nos valores abaixo.</canvas>
-            <div class="distance-map-legend solar-legend" aria-label="Legenda do Sistema Solar">
-              <span><i class="sun-dot" aria-hidden="true"></i>Sol</span>
-              <span><i class="earth-dot" aria-hidden="true"></i>Terra</span>
-              <span><i class="mars-dot" aria-hidden="true"></i>Marte</span>
-            </div>
-            <figcaption id="solar-caption">Os círculos são guias de escala a cada 0,5 ua. O tamanho dos marcadores é ilustrativo.</figcaption>
-          </figure>
-
-          <section id="solar-readout" class="glass-surface solar-readout" aria-labelledby="solar-distances-title" hidden>
-            <h3 id="solar-distances-title">Distâncias de Marte</h3>
-            <time id="solar-epoch" class="mono-val"></time>
-            <dl class="solar-distances">
-              <div><dt>Marte — Terra</dt><dd id="solar-earth-distance"></dd></div>
-              <div><dt>Marte — Sol</dt><dd id="solar-sun-distance"></dd></div>
-            </dl>
-            <p class="solar-model" id="solar-model"></p>
-            <details>
-              <summary>Coordenadas heliocêntricas (ua)</summary>
-              <table aria-label="Coordenadas heliocêntricas em unidades astronômicas">
-                <thead><tr><th scope="col">Astro</th><th scope="col">X</th><th scope="col">Y</th><th scope="col">Z</th></tr></thead>
-                <tbody id="solar-coordinates"></tbody>
-              </table>
-            </details>
-          </section>
-        </div>
-      </section>
-
       <!-- Assinatura espectral (0,75–5,00 µm) -->
       <section id="page-spectrum" class="page-view" aria-labelledby="spectrum-title">
         <div class="glass-surface spectrum-panel" style="margin-bottom: 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
@@ -2025,9 +1755,20 @@
         </div>
       </section>
     </main>
+    <footer class="gps-footer">
+      <details>
+        <summary>Sobre o Sky Researcher</summary>
+        <p>O comparador de imagens nasceu no NASA Space Apps Challenge, no desafio Planet X &amp; SPHEREx. Os recortes de Barnard usam imagens do Digitized Sky Survey, via ESO.</p>
+        <p>Efemérides do Astropy/ERFA. Texturas adaptadas do <a href="https://ssi.solarsystemscope.com/textures/">Solar System Scope</a>, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
+        <a href="https://github.com/gustavohenriqueesilva8-svg/sky-reshearch#fontes-cr%C3%A9ditos-e-licen%C3%A7a">Fontes, créditos e licença do projeto</a>
+      </details>
+    </footer>
 
     <script src="assets/barnard-demo.js"></script>
     <script src="assets/temporal-viewer.js"></script>
+    <script src="assets/vendor/three-gps.min.js"></script>
+    <script src="assets/solar-demo.js"></script>
+    <script src="assets/solar-scene.js"></script>
     <script src="assets/solar-system.js"></script>
     <script>
       const BASE_API_URL = window.location.protocol === "file:"
@@ -2712,8 +2453,10 @@
       }
 
       function switchPage(pageId, { updateUrl = true } = {}) {
+        if (pageId === "solar-system") pageId = "home";
         const page = document.getElementById(`page-${pageId}`);
         if (!page) pageId = "home";
+        document.body.dataset.activePage = pageId;
         const changed = !document.getElementById(`page-${pageId}`).classList.contains("active");
         document.querySelectorAll(".page-view").forEach((view) => {
           view.classList.toggle("active", view.id === `page-${pageId}`);
@@ -2730,7 +2473,8 @@
         }
         if (pageId !== "workbench" && videoState.playing) chooseTemporalEpoch(videoState.activeEpoch);
         if (pageId === "starmap") requestAnimationFrame(() => { drawSkyMap(); drawDistanceMap(); });
-        if (pageId === "solar-system") solarSystemView.activate();
+        if (pageId === "home") solarSystemView.activate();
+        else solarSystemView.deactivate();
         if (pageId === "spectrum") updateSpectrumTargetSummary();
       }
 
@@ -4186,7 +3930,7 @@
       }
 
       document.addEventListener("DOMContentLoaded", () => {
-        solarSystemView = createSolarSystemView(document.getElementById("page-solar-system"), requestApi);
+        solarSystemView = createSolarSystemView(document.getElementById("page-home"), requestApi);
         renderPresetOptions();
         setupSkyMapControls();
 
@@ -4217,7 +3961,10 @@
           tab.addEventListener("click", () => switchPage(tab.dataset.page));
         });
         document.querySelectorAll("[data-page-link]").forEach((button) => {
-          button.addEventListener("click", () => switchPage(button.dataset.pageLink));
+          button.addEventListener("click", () => {
+            switchPage(button.dataset.pageLink);
+            if (button.dataset.gpsTarget) solarSystemView.selectBody(button.dataset.gpsTarget);
+          });
         });
         document.querySelectorAll("[data-load-target]").forEach((button) => {
           button.addEventListener("click", () => {
@@ -4281,7 +4028,6 @@
           ? params.get("target") : "barnard";
         renderCatalogList();
         selectPresetTarget(initialTarget, { autoExecute: false });
-        // A tela inicial e o preset não iniciam consultas; o usuário escolhe uma ação.
         const initialPage = params.get("page") || "home";
         switchPage(initialPage, { updateUrl: false });
         if (example) showBarnardExample();

@@ -1,6 +1,6 @@
-# Sky Researcher — encontre um astro e entenda onde ele está
+# Sky Researcher — GPS espacial
 
-Encontre um objeto pelo nome ou identificador e descubra em que direção ele aparece no céu e a que distância aproximada está da Terra. O **GPS da Via Láctea** é a visão de uma ferramenta aberta de orientação astronômica. O comparador desenvolvido para o NASA Space Apps Challenge permite investigar observações do campo escolhido. [Planet X and SPHEREx](https://www.spaceappschallenge.org/2026/challenges/planet-x-and-spherex/)
+Localize astros, acompanhe trajetórias e explore como as posições mudam com o tempo. A página inicial simula Sol, Terra e Marte em 3D e mostra coordenadas e distâncias. O **Mapa Estelar** localiza outros alvos do catálogo e encaminha cada alvo a ferramentas de observação ou análise.
 
 ## Experimente com a Estrela de Barnard
 
@@ -12,11 +12,11 @@ Encontre um objeto pelo nome ou identificador e descubra em que direção ele ap
 
 A busca, o catálogo, a Carta 2D e a Vista 3D funcionam com os dados locais. Os filtros do catálogo ajudam a encontrar alvos da Via Láctea e listam as galáxias externas em um grupo separado. A carta mostra a direção dos objetos dos dois grupos. A vista 3D representa uma amostra dos objetos da Via Láctea cadastrados em relação à Terra. Para **R Draconis**, a carta indica a direção e a vista 3D explica que falta uma distância para posicioná-la.
 
-Ações do catálogo como pesquisar, selecionar ou trocar de vista são locais. O botão de observação encaminha o alvo para o comparador ou o espectro, conforme a ação disponível. As consultas aos arquivos remotos dependem da cobertura e da disponibilidade da fonte. Já a página **Sistema Solar** calcula posições de Marte e da Terra por data e hora por meio do servidor local.
+Ações do catálogo como pesquisar, selecionar ou trocar de vista são locais. O botão de observação encaminha o alvo para o comparador ou o espectro, conforme a ação disponível. As consultas aos arquivos remotos dependem da cobertura e da disponibilidade da fonte. O catálogo fornece direções e distâncias aproximadas para consulta. As trajetórias dinâmicas do GPS espacial abrangem Terra e Marte.
 
 ## Como executar
 
-Para usar o catálogo estelar e a atividade de Barnard com os dados locais, abra `index.html` no navegador mantendo a pasta `assets/` no mesmo diretório. Para habilitar o Sistema Solar, as consultas aos arquivos e o laboratório, use Python 3.10+:
+Ao abrir `index.html` diretamente, o GPS espacial oferece uma demonstração com datas amostradas, além do catálogo estelar e da atividade local de Barnard. Mantenha a pasta `assets/` ao lado do arquivo. Para consultar qualquer data da cobertura do GPS, acessar os arquivos remotos e usar o laboratório, execute o servidor com Python 3.10+:
 
 ```bash
 python -m venv .venv
@@ -27,11 +27,15 @@ python app.py
 
 Abra [http://127.0.0.1:8002](http://127.0.0.1:8002). A [documentação da API](http://127.0.0.1:8002/docs) é servida pelo mesmo processo. Para abrir o [exemplo de Barnard diretamente](http://127.0.0.1:8002/?page=workbench&example=barnard), use `?page=workbench&example=barnard`. As consultas ao vivo exigem conexão com o IRSA ou o SkyView, conforme a fonte escolhida.
 
-### Localize Marte no Sistema Solar
+### Explore o GPS espacial
 
-Com o servidor local em execução, abra [Sistema Solar](http://127.0.0.1:8002/?page=solar-system) ou clique em **Localizar Marte** na página inicial ou no **Mapa Estelar**. A vista abre no instante atual. Edite **Data e hora (UTC)** e clique em **Atualizar posição** para ver como os marcadores e as distâncias Marte–Terra e Marte–Sol mudam. Alterne entre **Vista inclinada**, **Plano XY** e **Plano XZ** ou abra a tabela de coordenadas. Os círculos são guias de escala, com intervalos de 0,5 unidade astronômica.
+Abra a [página inicial](http://127.0.0.1:8002/) ou clique em **Localizar Marte** no **Mapa Estelar**. Use **Data e hora (UTC)** para consultar um instante e a linha do tempo para avançar pelas posições amostradas. Arraste a cena ou use as setas com o canvas em foco. A rolagem, o gesto de pinça e os botões ajustam o zoom. **Focalizar** move a câmera para o astro selecionado. As coordenadas permanecem heliocêntricas.
 
-A página consulta `GET /api/ephemerides/mars?instant=2025-01-16T12:00:00Z`. O cálculo usa a efeméride embutida no servidor e funciona sem conexão externa. As posições são geométricas em relação ao Sol.
+A página consulta `GET /api/ephemerides/solar-system?instant=2025-01-16T12:00:00Z`. O servidor usa a efeméride local `astropy:builtin` para calcular a posição selecionada e amostrar 720 dias de trajetória em passos de cinco dias, incluindo o instante consultado. A janela se desloca perto dos limites de cobertura. A linha do tempo usa diretamente as posições calculadas para cada amostra e o desenho une os pontos por segmentos.
+
+A malha mede 0,5 ua por quadrícula no plano físico XY, com o Sol na origem. Para renderizar com Y para cima, a cena usa `(X, Z, -Y)` e uma unidade de cena por ua. A mesma transformação vale para a malha, as posições e as trajetórias. Os diâmetros ampliados e as texturas ilustrativas têm escala independente das posições. A vista 3D usa WebGL 2.
+
+O servidor funciona sem acesso externo para as efemérides. Ao abrir o arquivo diretamente ou quando o endpoint está indisponível na abertura, a demonstração usa as amostras locais geradas em torno de 16 de janeiro de 2025. [Proveniência da demonstração e dos recursos gráficos](assets/README.md)
 
 #### Geometria de Marte em Python
 
@@ -72,7 +76,7 @@ As principais rotas são `/api/spherex/blink` (par SPHEREx), `/api/motion_video`
 - A cobertura, a disponibilidade e as datas variam por campo. O SPHEREx temporal limita o raio a 30′; um par utilizável pode não existir no detector escolhido. Uma data ausente é apresentada como não informada. Consultas malsucedidas não geram imagens nem espectros substitutos sintéticos.
 - O Quick-Look é uma estimativa exploratória de brilho superficial em MJy/sr, sem fotometria PSF nem incerteza formal. A soma temporal não é ponderada pela variância; a subtração trabalha com quadros normalizados. O filtro de mediana pode atenuar fontes compactas.
 
-## Roadmap do GPS da Via Láctea
+## Roadmap do GPS espacial
 
 1. **Navegação por coordenadas e datas.** Adicionar busca por coordenadas e regiões, camadas de cobertura por levantamento e links para compartilhar parâmetros de investigação.
 2. **Investigações reproduzíveis.** Guardar observações e candidatos com IDs, datas, bandas, recortes e parâmetros de alinhamento. Permitir anotações e compartilhamento sem depender de um único arquivo remoto.
@@ -81,6 +85,7 @@ As principais rotas são `/api/spherex/blink` (par SPHEREx), `/api/motion_video`
 
 ## Fontes, créditos e licença
 
+- **Histórico do projeto.** O comparador foi desenvolvido no NASA Space Apps Challenge para investigar observações de um mesmo campo. [Planet X and SPHEREx](https://www.spaceappschallenge.org/2026/challenges/planet-x-and-spherex/)
 - **SPHEREx / NASA-IPAC IRSA:** [imagens espectrais DR1](https://doi.org/10.26131/IRSA678), [All-Sky Cube DR1](https://doi.org/10.26131/IRSA679) e [imagens espectrais QR3](https://doi.org/10.26131/IRSA662). A missão é um projeto do JPL e do Caltech financiado pela NASA. Consulte a [documentação de acesso aos dados](https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-access/) para consultar e citar os produtos.
 - **Dados ópticos e de apoio:** [ESO Online Digitized Sky Survey](https://archive.eso.org/dss/dss), [créditos e licença dos recortes DSS](assets/README.md), [NASA SkyView](https://skyview.gsfc.nasa.gov/) e [SIMBAD / CDS](https://simbad.cds.unistra.fr/simbad/sim-id?Ident=Barnard%27s+Star) para orientar o marcador de Barnard.
 - **Assistência de IA:** OpenAI Codex e Google Gemini auxiliaram no desenvolvimento, na depuração e na documentação. Visual Studio Code foi usado como editor. As imagens e os espectros observacionais vêm dos arquivos identificados no aplicativo.

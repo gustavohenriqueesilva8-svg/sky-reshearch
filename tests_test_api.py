@@ -66,6 +66,21 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(frame.status_code, 200)
             self.assert_png_image(frame.content)
 
+    def test_gps_home_serves_the_3d_scene_and_trajectory(self):
+        page = self.client.get("/")
+        self.assertIn('<h1 id="home-title">GPS espacial</h1>', page.text)
+        self.assertIn('id="gps-timeline"', page.text)
+        self.assertEqual(self.client.get("/assets/solar-scene.js").status_code, 200)
+        endpoint = "/api/ephemerides/solar-system"
+        instant = "2025-01-16T12:00:00Z"
+        response = self.client.get(endpoint, params={"instant": instant})
+        self.assertEqual(response.status_code, 200)
+        simulation = response.json()
+        self.assertEqual(simulation["geometry"], mars_geometry(instant))
+        self.assertGreaterEqual(len(simulation["trajectory"]), 145)
+        unsupported = self.client.get(endpoint, params={"instant": "2050-01-01T00:00:00Z"})
+        self.assertEqual(unsupported.status_code, 422)
+
     def test_catalog_endpoint_returns_challenge_and_famous_targets(self):
         response = self.client.get("/api/catalog")
         self.assertEqual(response.status_code, 200)

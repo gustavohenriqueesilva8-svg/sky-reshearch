@@ -1,7 +1,7 @@
 """Offline tests for the built-in Mars geometry model."""
 
 from contextlib import ExitStack
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import isfinite, sqrt
 import os
 from pathlib import Path
@@ -20,7 +20,9 @@ from astropy.time import Time, TimeDelta  # type: ignore[import-untyped]
 from astropy.utils import data, iers  # type: ignore[import-untyped]
 from erfa import ErfaWarning  # type: ignore[import-untyped]
 
-from ephemerides import mars_geometry
+import numpy as np
+
+from ephemerides import mars_geometry, solar_simulation
 
 
 _AXES: tuple[Literal["x", "y", "z"], ...] = ("x", "y", "z")
@@ -182,7 +184,7 @@ class MarsGeometryTests(unittest.TestCase):
             self.assertGreater(distance, 0.0)
 
     def test_other_erfa_warnings_propagate_and_iers_settings_are_restored(self) -> None:
-        def warn_during_conversion(utc: datetime, *, scale: str) -> None:
+        def warn_during_conversion(utc: list[datetime], *, scale: str) -> None:
             self.assertIs(iers.conf.auto_download, False)
             self.assertIsNone(iers.conf.auto_max_age)
             warnings.warn("unexpected ERFA warning", ErfaWarning)
@@ -200,6 +202,49 @@ class MarsGeometryTests(unittest.TestCase):
                 mars_geometry(self.instant)
             self.assertIs(iers.conf.auto_download, True)
             self.assertEqual(iers.conf.auto_max_age, 42.0)
+
+    def test_trajectory_reuses_geometry_at_the_selected_and_sampled_instants(self) -> None:
+        instant = "2025-01-16T13:37:25Z"
+        simulation = solar_simulation(instant)
+        self.assertEqual(simulation["geometry"], mars_geometry(instant))
+        trajectory = simulation["trajectory"]
+        for sample in (trajectory[0], trajectory[30], trajectory[72], trajectory[-1]):
+            with self.subTest(instant=sample["instant_utc"]):
+                direct = mars_geometry(sample["instant_utc"])["positions"]
+                self.assertEqual(sample["earth"], direct["earth"])
+                self.assertEqual(sample["mars"], direct["mars"])
+        selected = next(sample for sample in trajectory if sample["instant_utc"] == instant)
+        self.assertEqual(selected["earth"], simulation["geometry"]["positions"]["earth"])
+        self.assertEqual(selected["mars"], simulation["geometry"]["positions"]["mars"])
+
+    def test_trajectory_window_stays_inside_coverage_and_keeps_distinct_planes(self) -> None:
+        bounds = ("2000-01-01T00:00:00Z", "2049-12-31T23:59:59.999999Z")
+        for instant in bounds:
+            with self.subTest(instant=instant):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    trajectory = solar_simulation(instant)["trajectory"]
+                times = [
+                    datetime.fromisoformat(sample["instant_utc"].replace("Z", "+00:00"))
+                    for sample in trajectory
+                ]
+                self.assertIn(instant, (trajectory[0]["instant_utc"], trajectory[-1]["instant_utc"]))
+                self.assertLessEqual(bounds[0], trajectory[0]["instant_utc"])
+                self.assertLessEqual(trajectory[-1]["instant_utc"], bounds[-1])
+                self.assertEqual(times[-1] - times[0], timedelta(days=720))
+                for earlier, later in zip(times, times[1:]):
+                    self.assertLess(timedelta(), later - earlier)
+                    self.assertLessEqual(later - earlier, timedelta(days=5))
+
+                bodies: tuple[Literal["earth", "mars"], ...] = ("earth", "mars")
+                normals = []
+                for body in bodies:
+                    first_vector = [trajectory[0][body][axis] for axis in _AXES]
+                    later_vector = [trajectory[9][body][axis] for axis in _AXES]
+                    normal = np.cross(first_vector, later_vector)
+                    self.assertGreater(abs(float(normal[1])), 0.1)
+                    normals.append(normal / np.linalg.norm(normal))
+                self.assertGreater(float(np.linalg.norm(normals[0] - normals[1])), 0.01)
 
 
 class MarsGeometryOfflineTests(unittest.TestCase):
