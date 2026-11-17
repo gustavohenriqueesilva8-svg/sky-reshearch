@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sky Researcher · GPS espacial</title>
     <meta name="description" content="GPS espacial para explorar posições e trajetórias de astros.">
+    <link rel="icon" href="assets/solar/sun.jpg" type="image/jpeg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Overpass:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1295,41 +1296,83 @@
                 <button class="gps-button gps-icon-button" id="gps-zoom-out" type="button" aria-label="Afastar" data-gps-camera>−</button>
                 <button class="gps-button gps-icon-button" id="gps-zoom-in" type="button" aria-label="Aproximar" data-gps-camera>+</button>
               </div>
+              <div class="gps-playback-controls">
+                <button class="gps-button" id="gps-play" type="button" disabled>Reproduzir</button>
+                <label for="gps-playback-rate">Ritmo temporal</label>
+                <select id="gps-playback-rate">
+                  <option value="60">1 min/s</option>
+                  <option value="3600">1 h/s</option>
+                  <option value="86400" selected>1 dia/s</option>
+                  <option value="604800">7 dias/s</option>
+                </select>
+              </div>
             </div>
             <div class="gps-scale" role="group" aria-label="Escala dos astros">
               <span>Diâmetros</span>
-              <button class="gps-button" type="button" data-gps-scale="visual" aria-pressed="true">Visualização aprimorada</button>
-              <button class="gps-button" type="button" data-gps-scale="real" aria-pressed="false">Proporção real</button>
+              <button class="gps-button" type="button" data-gps-scale="real" aria-pressed="true">Proporção real</button>
+              <button class="gps-button" type="button" data-gps-scale="visual" aria-pressed="false">Visualização aprimorada</button>
+              <button class="gps-button" id="gps-compare-3d" type="button" aria-pressed="false" data-gps-camera>Comparar tamanhos 3D</button>
+              <button class="gps-button" id="gps-outside-earth" type="button" data-gps-camera disabled>Fora da Terra → Sol</button>
+            </div>
+            <div class="gps-measure">
+              <label for="gps-measure-pair">Distância entre centros</label>
+              <select id="gps-measure-pair">
+                <option value="sun-earth">Sol–Terra</option>
+                <option value="sun-mars">Sol–Marte</option>
+                <option value="earth-mars">Terra–Marte</option>
+                <option value="">Ocultar linha</option>
+              </select>
+              <span id="gps-measure-value" hidden>
+                <strong id="gps-measure-au"></strong><span id="gps-measure-km"></span>
+              </span>
             </div>
             <div id="gps-stage" class="gps-stage">
               <canvas tabindex="0" aria-label="Cena 3D do Sistema Solar" aria-describedby="gps-instructions">
                 Consulte as posições e distâncias na seção do astro selecionado.
               </canvas>
               <canvas class="gps-vector-overlay" aria-hidden="true"></canvas>
-              <span class="gps-scene-label gps-axis-x" data-scene-label="x" aria-hidden="true" hidden>+X</span>
-              <span class="gps-scene-label gps-axis-y" data-scene-label="y" aria-hidden="true" hidden>+Y</span>
-              <span class="gps-scene-label gps-axis-z" data-scene-label="z" aria-hidden="true" hidden>+Z</span>
+              <div class="gps-view-scale" id="gps-view-scale" hidden>
+                <span id="gps-view-scale-plane" title="Escala no plano paralelo à tela que passa pelo centro do astro indicado."></span>
+                <strong id="gps-view-scale-value"></strong>
+                <span id="gps-view-scale-bar" aria-hidden="true"></span>
+                <span id="gps-view-range"></span>
+              </div>
+              <span class="gps-scene-label" data-scene-label="ring-0.5" aria-hidden="true" hidden>0,5 ua</span>
+              <span class="gps-scene-label" data-scene-label="ring-1" aria-hidden="true" hidden>1,0 ua</span>
+              <span class="gps-scene-label" data-scene-label="ring-1.5" aria-hidden="true" hidden>1,5 ua</span>
               <button class="gps-scene-label gps-sun" type="button" data-scene-label="sun" aria-label="Centralizar Sol na cena" aria-pressed="false" hidden><span>Sol</span></button>
               <button class="gps-scene-label gps-earth" type="button" data-scene-label="earth" aria-label="Centralizar Terra na cena" aria-pressed="false" hidden><span>Terra</span></button>
               <button class="gps-scene-label gps-mars" type="button" data-scene-label="mars" aria-label="Centralizar Marte na cena" aria-pressed="false" hidden><span>Marte</span></button>
               <p id="gps-render-error" role="status" hidden>Visualização 3D indisponível neste navegador. A cena requer WebGL 2.</p>
             </div>
             <figcaption>
-              <span><strong>Plano XY</strong> · Origem <span id="gps-frame-origin">no Sol</span> · Malha de 0,5 ua · ICRS aproximado</span>
-              <span id="gps-scale-note">Diâmetros ampliados para leitura. Posições e distâncias em escala linear.</span>
+              <section class="gps-diameter-comparison" aria-labelledby="gps-diameter-title">
+                <h3 id="gps-diameter-title">Diâmetros lado a lado</h3>
+                <p>Em escala comum, o Sol tem <strong id="gps-diameter-ratio"></strong> o diâmetro da Terra.</p>
+                <dl>
+                  <div class="gps-sun"><dt>Sol</dt><dd data-diameter-value="sun"></dd><dd class="gps-diameter-icon" aria-hidden="true"><span data-diameter-disk="sun"></span></dd></div>
+                  <div class="gps-earth"><dt>Terra</dt><dd data-diameter-value="earth"></dd><dd class="gps-diameter-icon" aria-hidden="true"><span data-diameter-disk="earth"></span></dd></div>
+                  <div class="gps-mars"><dt>Marte</dt><dd data-diameter-value="mars"></dd><dd class="gps-diameter-icon" aria-hidden="true"><span data-diameter-disk="mars"></span></dd></div>
+                </dl>
+              </section>
+              <span id="gps-comparison-note" hidden>Comparação em projeção ortográfica, com os centros no mesmo plano. Selecione um astro para voltar à sua posição na cena.</span>
+              <span id="gps-earth-view-note" hidden>Vista a partir do lado noturno. O crescente é a parte visível iluminada pelo Sol.</span>
+              <span><strong>Grade eclíptica J2000</strong> · Origem <span id="gps-frame-origin">no Sol</span> · Anéis a cada 0,5 ua</span>
+              <span id="gps-scale-note">Diâmetros e distâncias na mesma escala. ◇ indica menos de 2 px. Selecione um astro para se aproximar.</span>
+              <span>A régua usa a profundidade do astro indicado.</span>
               <span>Texturas e orientação de superfície ilustrativas.</span>
               <div class="gps-orbit-legend" role="group" aria-label="Legenda das curvas">
                 <span class="gps-orbit-key gps-sun" id="gps-sun-track" hidden>Trajetória do Sol</span>
                 <span class="gps-orbit-key gps-earth" id="gps-earth-track">Órbita da Terra</span>
                 <span class="gps-orbit-key gps-mars" id="gps-mars-track">Órbita de Marte</span>
-                <span>Segmentos entre posições de Astropy/ERFA no referencial selecionado. Transferência Terra–Marte indisponível.</span>
+                <span>Rastros mais claros junto aos astros mostram até 12 dias anteriores no referencial selecionado.</span>
               </div>
               <div class="gps-vector-legend" id="gps-velocity-legend" hidden>
                 <span class="gps-velocity-key" aria-hidden="true">➜</span>
                 <span>Velocidade · <span id="gps-velocity-scale"></span></span>
               </div>
               <span id="gps-texture-status" role="status" hidden></span>
-              <span id="gps-instructions">Arraste ou use as setas para olhar. Com um astro selecionado, esses controles giram ao redor dele. Use roda, pinça ou +/− para o zoom. Em navegação livre, use W/S, A/D e Q/E para mover, ou arraste com o botão direito, Shift ou dois dedos para deslocar a vista.</span>
+              <span id="gps-instructions">Arraste ou use as setas para olhar. Com um astro selecionado, esses controles giram ao redor dele. Use roda, pinça ou +/− para aproximar e afastar. Em navegação livre, a roda aproxima em direção ao ponteiro. Use W/S, A/D e Q/E para mover, ou arraste com o botão direito, Shift ou dois dedos para deslocar a vista.</span>
             </figcaption>
           </figure>
 
@@ -1341,18 +1384,9 @@
                   <time id="gps-range-start"></time><span aria-hidden="true">—</span><time id="gps-range-end"></time>
                 </p>
               </div>
-              <button class="gps-button" id="gps-play" type="button" disabled>Reproduzir</button>
             </div>
             <input id="gps-timeline" type="range" min="0" max="0" step="1" value="0" aria-describedby="gps-sampling" disabled>
-            <p id="gps-sampling">Posições amostradas pela efeméride <span id="gps-source"></span></p>
-            <label class="gps-rate">Ritmo de reprodução
-              <select id="gps-playback-rate">
-                <option value="0.5">0,5×</option>
-                <option value="1" selected>1×</option>
-                <option value="2">2×</option>
-                <option value="5">5×</option>
-              </select>
-            </label>
+            <p id="gps-sampling">Movimento interpolado entre amostras da efeméride <span id="gps-source"></span></p>
           </section>
 
           <div class="gps-controls">
@@ -1365,7 +1399,7 @@
                   <option value="mars">Marte</option>
                 </select>
               </label>
-              <p id="gps-movement-clock">Tempo real · 1 s/s</p>
+              <p id="gps-movement-clock">Preparando simulação</p>
               <dl class="gps-speeds" aria-label="Módulos das velocidades relativas" aria-describedby="gps-speed-axis">
                 <div class="gps-sun"><dt>Sol</dt><dd id="gps-speed-sun">—</dd><span class="gps-speed-track" aria-hidden="true"><span id="gps-speed-bar-sun"></span></span></div>
                 <div class="gps-earth"><dt>Terra</dt><dd id="gps-speed-earth">—</dd><span class="gps-speed-track" aria-hidden="true"><span id="gps-speed-bar-earth"></span></span></div>
@@ -1390,7 +1424,8 @@
             <form id="gps-form" class="gps-panel gps-date">
               <h2 id="gps-clock-title">Tempo da simulação</h2>
               <div class="gps-actions" role="group" aria-labelledby="gps-clock-title">
-                <button class="gps-button" type="button" data-gps-clock="live" aria-pressed="true">Tempo real</button>
+                <button class="gps-button" type="button" data-gps-clock="simulation" aria-pressed="true">Simulação</button>
+                <button class="gps-button" type="button" data-gps-clock="live" aria-pressed="false">Tempo real</button>
                 <button class="gps-button" type="button" data-gps-clock="range" aria-pressed="false">Recorte UTC</button>
               </div>
               <p id="gps-coverage">Cobertura UTC de 2000 a 2049.</p>
@@ -1426,7 +1461,7 @@
                 <div><dt>Z</dt><dd id="gps-coordinate-z"></dd></div>
               </dl>
               <dl class="gps-distances">
-                <div><dt>Diâmetro físico equatorial</dt><dd id="gps-body-diameter"></dd></div>
+                <div><dt>Diâmetro físico</dt><dd id="gps-body-diameter"></dd></div>
                 <div><dt>Diâmetro aparente aprox.</dt><dd id="gps-apparent">—</dd></div>
                 <div><dt>Distância ao Sol</dt><dd id="gps-distance-sun"></dd></div>
                 <div><dt>Distância à Terra</dt><dd id="gps-distance-earth"></dd></div>

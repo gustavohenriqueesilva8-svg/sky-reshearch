@@ -43,7 +43,8 @@ O módulo de entrada do pacote usa os exports abaixo.
 export {
   AmbientLight, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, GridHelper, Group, Line,
   LineBasicMaterial, LineSegments, Matrix3, Mesh, MeshBasicMaterial, MeshStandardMaterial,
-  PerspectiveCamera, PlaneGeometry, PointLight, Raycaster, Scene, ShaderMaterial, SphereGeometry,
+  OrthographicCamera, PerspectiveCamera, PlaneGeometry, PointLight, Points, PointsMaterial, Raycaster,
+  Scene, ShaderMaterial, SphereGeometry,
   Spherical, SRGBColorSpace, TextureLoader, Vector2, Vector3, WebGLRenderer,
 } from "three";
 export { OrbitControls } from "three/addons/controls/OrbitControls.js";

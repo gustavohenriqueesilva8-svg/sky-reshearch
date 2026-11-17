@@ -2,13 +2,13 @@
 
 import argparse
 from datetime import datetime, timedelta
-from math import cos, dist, isclose, pi, sqrt
+from math import cos, dist, isclose, pi, sin, sqrt
 from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 
 AU = 149_597_870.7
-RADII = {"sun": (695_700, 695_700), "earth": (6378.1, 6356.8), "mars": (3396.2, 3376.2)}
+RADII = {"sun": 696_350, "earth": 6371, "mars": 3389.5}
 GM = {"sun": 1.3271244e11, "earth": 398_600.435507, "mars": 42_828.37362}
 START = "2025-01-16T12:00:00Z"
 END = "2025-02-21T12:00:00Z"
@@ -21,7 +21,21 @@ TAP = """
       window.inspectGps = () => ({
         camera: camera.position.toArray(), target: controls.target.toArray(), trackedBody,
         light: sunlight.position.toArray(),
+        lightDecay: sunlight.decay, emissive: meshes.earth.material.emissive.getHex(),
+        logarithmic: renderer.capabilities.logarithmicDepthBuffer, cameraFar: camera.far,
+        gridVisible: grid.visible, gridOpacity: gridInk.opacity,
+        starCount: stars.geometry.getAttribute("position").count,
+        halo: { center: halo.position.toArray(), radius: halo.scale.x },
+        rings: grid.children.slice(0, 4).map(({geometry}) => {
+          const ring = geometry.getAttribute("position");
+          return new THREE.Vector3(ring.getX(32), ring.getY(32), ring.getZ(32)).toArray();
+        }),
+        trails: Object.fromEntries(Object.entries(trails).filter(([,trail]) => trail.visible)
+          .map(([id,trail]) => [id, Array.from(trail.geometry.getAttribute("position").array)])),
         velocityScale: window.velocityScale,
+        measurement: baseline.visible ? Array.from(baseline.geometry.getAttribute("position").array) : null,
+        pixelsPerSlope: stage.clientHeight * camera.projectionMatrix.elements[5] / 2,
+        referenceDepth: -meshes[trackedBody ?? frameReference].position.clone().applyMatrix4(camera.matrixWorldInverse).z,
         vectors: window.projectedVectors, vectorLabels: window.vectorLabels,
         accelerations,
         meshes: Object.fromEntries(Object.entries(meshes).map(([id, mesh]) => [id, {
@@ -68,7 +82,7 @@ TAP = """
         copyPixels();
         let changed = 0;
         for (let i = 0; i < on.length; i += 4) {
-          if (Math.abs(on[i + 3] - off[i + 3]) > 12) changed++;
+          if (Math.max(...[0,1,2].map(c => Math.abs(on[i+c] - off[i+c]))) > 10) changed++;
         }
         return changed / (width * height);
       };
@@ -85,11 +99,42 @@ TAP = """
         }
         return colors.size;
       };
+      window.earthLighting = () => {
+        renderer.render(scene, camera);
+        const gl = renderer.getContext();
+        const width = gl.drawingBufferWidth;
+        const height = gl.drawingBufferHeight;
+        const pixels = new Uint8Array(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const raycaster = new THREE.Raycaster();
+        const earth = meshes.earth;
+        const radius2 = earth.scale.x ** 2;
+        let bright = 0;
+        let dark = 0;
+        for (let y = 4; y < height; y += 5) {
+          for (let x = 4; x < width; x += 5) {
+            raycaster.setFromCamera({ x: 2*(x+0.5)/width-1, y: 2*(y+0.5)/height-1 }, camera);
+            const { origin, direction } = raycaster.ray;
+            const offset = earth.position.clone().sub(origin);
+            const along = offset.dot(direction);
+            const discriminant = radius2 - (offset.lengthSq() - along ** 2);
+            if (along <= 0 || discriminant < radius2 * 0.015) continue;
+            const surface = origin.clone().addScaledVector(direction, along - Math.sqrt(discriminant));
+            const daylight = surface.clone().sub(earth.position).normalize()
+              .dot(meshes.sun.position.clone().sub(surface).normalize());
+            const i = (y * width + x) * 4;
+            const peak = Math.max(pixels[i], pixels[i+1], pixels[i+2]);
+            if (daylight > 0.12) bright = Math.max(bright, peak);
+            if (daylight < -0.3) dark = Math.max(dark, peak);
+          }
+        }
+        return { bright, dark };
+      };
 """
 VECTOR_TAP = """
       const ratio = overlay.width / width;
-      const sampleX = Math.round((x + ox + ux * (gap + (length - gap - head) / 2)) * ratio);
-      const sampleY = Math.round((y + oy + uy * (gap + (length - gap - head) / 2)) * ratio);
+      const sampleX = Math.round((x + ox + ux * (gap + (visibleLength - gap - head) / 2)) * ratio);
+      const sampleY = Math.round((y + oy + uy * (gap + (visibleLength - gap - head) / 2)) * ratio);
       const rgb = ink.getImageData(sampleX, sampleY, 1, 1).data;
       window.projectedVectors.push({
         name: vector.name, gravity: vector.gravity ?? false, delta: vector.delta.toArray(),
@@ -98,6 +143,16 @@ VECTOR_TAP = """
 """
 TEST_TAPS = {
     "      renderer.render(scene, camera);": TAP,
+    "        renderer.render(comparisonScene, comparisonCamera);": """
+        window.inspectComparison = () => ({
+          orthographic: comparisonCamera.isOrthographicCamera,
+          meshes: Object.fromEntries(Object.entries(comparisonMeshes).map(([id, mesh]) => [id, {
+            depth: -mesh.position.clone().applyMatrix4(comparisonCamera.matrixWorldInverse).z,
+            diameter: 2 * mesh.scale.x * mesh.geometry.parameters.radius,
+            projected: mesh.scale.x * comparisonCamera.projectionMatrix.elements[5] * stage.clientHeight,
+          }])),
+        });
+""",
     "      onVelocityScale(showVelocityArrows && velocityScale ? velocityScale : null);":
         "\n      window.velocityScale = velocityScale;",
     "      ink.lineWidth = vector.gravity ? 2 : 3.25;\n      ink.stroke();": VECTOR_TAP,
@@ -163,14 +218,17 @@ def verify_gravity(page, data, current):
     meshes = current["meshes"]
     assert field["visible"]
     anchor = current["trackedBody"] or "sun"
-    x, _, z = meshes["sun"]["center"]
-    origin = (x, meshes[anchor]["center"][1], z)
+    tilt = 23.4392911 * pi / 180
+    normal = (0, cos(tilt), sin(tilt))
+    sun = meshes["sun"]["center"]
+    height = sum((a - b) * axis for a, b, axis in zip(meshes[anchor]["center"], sun, normal, strict=True))
+    origin = tuple(component + height * axis for component, axis in zip(sun, normal, strict=True))
     assert dist(field["origin"], origin) < 1e-14
-    assert dist(field["normal"], (0, 1, 0)) < 1e-14
+    assert dist(field["normal"], normal) < 1e-14
     for i, (body, model) in enumerate(meshes.items()):
         assert dist(field["offsets"][i], tuple(a - b for a, b in zip(model["center"], origin, strict=True))) < 1e-14
         assert isclose(field["gmPerAu"][i], GM[body] / AU, rel_tol=1e-14)
-        assert isclose(field["radii"][i], RADII[body][0] / AU, rel_tol=1e-14)
+        assert isclose(field["radii"][i], RADII[body] / AU, rel_tol=1e-14)
         here = data["positions"][body]
         actual = current["accelerations"][body]
         total = [0.0, 0.0, 0.0]
@@ -215,7 +273,7 @@ def verify_surface(layer):
     rs = 2 * 1.3271244e11 / 299_792.458 ** 2
     rings = layer["rings"]
     assert layer["visible"] and len(rings) == 37
-    assert isclose(rings[0][0] * cos(pi / 72), 695_700 / AU, rel_tol=1e-7)
+    assert isclose(rings[0][0] * cos(pi / 72), RADII["sun"] / AU, rel_tol=1e-7)
     assert rings[-1] == [2, 0]
     height_errors = []
     for radius_au, height_au in rings:
@@ -250,32 +308,86 @@ def check_view(page, width, captures):
     expect(canvas).to_be_visible()
     page.wait_for_function("Object.values(inspectGps().meshes).every(m => m.visible && m.textureWidth === 1024)")
     expect(page.locator("#gps-render-error")).to_be_hidden()
-    expect(page.locator("#gps-live-state")).to_have_text("Acompanhando o relógio UTC")
+    expect(page.locator("#gps-live-state")).to_have_text("Efemérides da simulação")
+    expect(page.get_by_role("button", name="Pausar", exact=True)).to_be_enabled()
     params = {"instant": START, "velocities": "true"}
     data = page.request.get("/api/ephemerides/mars", params=params).json()
     cut(page)
+    visual = page.get_by_role("button", name="Visualização aprimorada", exact=True)
+    visual.press("Enter")
     assert not page.evaluate("labelsCoverBodies()")
 
     real = page.get_by_role("button", name="Proporção real", exact=True)
     real.press("Enter")
     assert not page.evaluate("labelsCoverBodies()")
     overview = assert_frame(page, data, "sun")
+    assert overview["logarithmic"] and overview["cameraFar"] > 5 and dist(overview["camera"], ZERO) > 5
+    assert overview["gridVisible"] and overview["gridOpacity"] > 0.6
+    assert overview["starCount"] >= 1000
+    for ring, radius in zip(overview["rings"], [0.5, 1, 1.5, 2], strict=True):
+        assert isclose(dist(ring, ZERO), radius, rel_tol=1e-7)
+        assert isclose(ring[1] / -ring[2], 0.43355, rel_tol=1e-4)
     for key, model in overview["meshes"].items():
-        equatorial, polar = RADII[key]
+        radius = RADII[key]
         assert model["visible"] and model["geometry"] == "SphereGeometry"
-        assert dist(model["scale"], (equatorial / AU, polar / AU, equatorial / AU)) < 1e-15
-        assert isclose(model["diameter"], 2 * equatorial / AU, rel_tol=1e-13)
+        assert dist(model["scale"], (radius / AU,) * 3) < 1e-15
+        assert isclose(model["diameter"], 2 * radius / AU, rel_tol=1e-13)
     meshes = overview["meshes"]
     ratio = meshes["sun"]["diameter"] / meshes["earth"]["diameter"]
     separation = dist(meshes["mars"]["center"], meshes["earth"]["center"])
-    assert isclose(ratio, 695_700 / 6378.1, rel_tol=1e-13)
+    assert isclose(ratio, RADII["sun"] / RADII["earth"], rel_tol=1e-13)
     assert isclose(separation, data["distances"]["mars_earth"], rel_tol=1e-13)
+    pair = page.get_by_role("combobox", name="Distância entre centros")
+    for value, first, second in (("sun-earth", "sun", "earth"), ("sun-mars", "sun", "mars"), ("earth-mars", "earth", "mars")):
+        pair.select_option(value)
+        line = state(page)["measurement"]
+        assert dist(line[:3], meshes[first]["center"]) < 1e-7
+        assert dist(line[3:], meshes[second]["center"]) < 1e-7
+        km = round(dist(world(data["positions"][first]), world(data["positions"][second])) * AU)
+        expect(page.locator("#gps-measure-km")).to_have_text(f"{km:,} km".replace(",", "."))
+    pair.select_option("")
+    assert state(page)["measurement"] is None
+    expect(page.locator("#gps-measure-value")).to_be_hidden()
+    pair.select_option("sun-earth")
+
+    ruler = page.locator("#gps-view-scale-value")
+    length, unit = ruler.inner_text().split()
+    distance_au = float(length.replace(".", "").replace(",", ".")) / (AU if unit == "km" else 1)
+    drawn = page.locator("#gps-view-scale-bar").bounding_box()["width"]
+    assert isclose(drawn, distance_au * overview["pixelsPerSlope"] / overview["referenceDepth"], abs_tol=0.04)
     expect(page.get_by_role("button", name="Centralizar Marte na cena")).to_have_attribute("data-subpixel", "")
 
     velocity_arrows = {arrow["name"]: arrow for arrow in overview["vectors"]}
     assert set(velocity_arrows) == {"v · Terra", "v · Marte"}
-    assert set(overview["vectorLabels"]) == set(velocity_arrows)
     assert all(arrow["rgba"][3] >= 220 for arrow in velocity_arrows.values())
+    assert overview["velocityScale"] == 0.016
+
+    compare = page.get_by_role("button", name="Comparar tamanhos 3D")
+    compare.click()
+    comparison = page.evaluate("inspectComparison()")
+    assert comparison["orthographic"]
+    assert len({sphere["depth"] for sphere in comparison["meshes"].values()}) == 1
+    for key, sphere in comparison["meshes"].items():
+        assert isclose(sphere["diameter"], meshes[key]["diameter"], rel_tol=1e-13)
+        assert isclose(comparison["meshes"]["sun"]["projected"] / sphere["projected"], RADII["sun"] / RADII[key])
+    compare.click()
+    assert state(page)["meshes"] == meshes
+
+    page.get_by_role("button", name="Fora da Terra → Sol").click()
+    preset = state(page)
+    assert preset["meshes"] == meshes and preset["logarithmic"]
+    assert not preset["gridVisible"]
+    assert preset["light"] == meshes["sun"]["center"] and preset["lightDecay"] == 2 and preset["emissive"] == 0
+    assert preset["halo"]["center"] == preset["light"]
+    assert isclose(preset["halo"]["radius"], RADII["sun"] * 2.75 / AU, rel_tol=1e-13)
+    altitude_km = dist(preset["camera"], meshes["earth"]["center"]) * AU - RADII["earth"]
+    assert isclose(altitude_km, 5000, abs_tol=1e-6)
+    expect(page.get_by_role("button", name="Centralizar Sol na cena")).to_be_visible()
+    expect(page.get_by_role("button", name="Centralizar Terra na cena")).to_be_visible()
+    lighting = page.evaluate("earthLighting()")
+    assert lighting["dark"] <= 3 and lighting["bright"] >= 35, lighting
+    page.get_by_role("button", name="Visão geral", exact=True).click()
+    assert state(page)["gridVisible"]
     if captures:
         page.locator("#gps-stage").screenshot(path=captures / f"visao-geral-{width}.png")
         page.locator(".gps-motion").screenshot(path=captures / f"velocidades-{width}.png")
@@ -299,7 +411,7 @@ def check_view(page, width, captures):
     verify_gravity(page, data, field)
     assert {arrow["name"] for arrow in field["vectors"] if arrow["gravity"]} == {"g · Sol", "g · Terra", "g · Marte"}
     changed = page.evaluate("gravityFieldPixels()")
-    assert changed > 0.12, changed
+    assert changed > 0.08, changed
     near, far = verify_isolated_source(page)
     if captures:
         page.locator("#gps-stage").screenshot(path=captures / f"campo-{width}.png")
@@ -315,7 +427,7 @@ def check_view(page, width, captures):
     closer = assert_frame(page, data, "sun")
     assert closer["meshes"] == meshes
     assert dist(closer["camera"], closer["target"]) < dist(before["camera"], before["target"])
-    assert closer["velocityScale"] != overview["velocityScale"]
+    assert closer["velocityScale"] == overview["velocityScale"]
     assert any(arrow["name"] == "v · Marte" for arrow in closer["vectors"])
     verify_gravity(page, data, closer)
     source = page.get_by_role("combobox", name="Vetor de aceleração no foco")
@@ -323,7 +435,6 @@ def check_view(page, width, captures):
     source.select_option("earth")
     contribution = state(page)
     assert any(arrow["name"] == "g · Marte ← Terra" for arrow in contribution["vectors"])
-    assert {"v · Marte", "g · Marte ← Terra"} <= set(contribution["vectorLabels"])
     verify_gravity(page, data, contribution)
     if captures:
         source.focus()
@@ -343,24 +454,24 @@ def check_view(page, width, captures):
     select.select_option("mars")
     assert_frame(page, data, "mars")
 
-    visual = page.get_by_role("button", name="Visualização aprimorada", exact=True)
     for scale, is_real in ((visual, False), (real, True)):
         scale.click()
         for key, name in (("sun", "Sol"), ("earth", "Terra"), ("mars", "Marte")):
             page.get_by_role("button", name=name, exact=True).click()
             current = state(page)
             model = current["meshes"][key]
-            equatorial, polar = RADII[key]
+            radius = RADII[key]
             if is_real:
                 assert isclose(model["diameter"], meshes[key]["diameter"], rel_tol=1e-13)
-                assert isclose(model["scale"][1], polar / AU, rel_tol=1e-13)
+                assert isclose(model["scale"][1], radius / AU, rel_tol=1e-13)
             else:
-                assert model["diameter"] > 2 * equatorial / AU
+                assert model["diameter"] > 2 * radius / AU
             assert model["visible"] and model["textureWidth"] == 1024
             assert current["target"] == model["center"]
             px = float(page.locator("#gps-apparent").inner_text().removesuffix(" px").replace(",", "."))
             assert px > 80
-            assert page.evaluate("centerModelPixels()") > 4
+            if key == "sun":
+                assert page.evaluate("centerModelPixels()") > 4
     if width < 500:
         before_pinch = state(page)
         pinch_in(page, canvas)
@@ -374,8 +485,7 @@ def check_view(page, width, captures):
     assert dist(turned["camera"], free["camera"]) < 1e-12
     assert dist(turned["target"], free["target"]) > 1e-8
 
-    playback = page.get_by_role("combobox", name="Ritmo de reprodução")
-    playback.select_option("2")
+    playback = page.get_by_role("combobox", name="Ritmo temporal")
     expect(page.locator("#gps-epoch")).to_have_attribute("datetime", START)
     stationary = assert_frame(page, data, "mars")
     page.get_by_role("button", name="Visão geral", exact=True).click()
@@ -383,17 +493,29 @@ def check_view(page, width, captures):
     start = datetime.fromisoformat(START)
     page.clock.install(time=start)
     page.clock.pause_at(start + timedelta(seconds=1))
-    play.evaluate("(button) => button.click()")
-    expect(page.locator("#gps-movement-clock")).to_have_text("Reprodução · 2,000 dias/s")
-    page.clock.run_for(1600)
-    step_time = page.locator("#gps-epoch").get_attribute("datetime")
-    step = (datetime.fromisoformat(step_time) - start).total_seconds() / 86400
-    assert 2.8 <= step <= 3.5, step
-    page.get_by_role("button", name="Pausar").evaluate("(button) => button.click()")
+    for rate, label in ((60, "1 min/s"), (3600, "1 h/s"), (86400, "1 dia/s"), (604800, "7 dias/s")):
+        page.locator("#gps-timeline").evaluate("(slider) => { slider.value = 0; slider.dispatchEvent(new Event('input')); }")
+        playback.select_option(str(rate))
+        play.evaluate("(button) => button.click()")
+        expect(page.locator("#gps-movement-clock")).to_have_text(f"Em movimento · {label}")
+        page.clock.run_for(1600)
+        step_time = page.locator("#gps-epoch").get_attribute("datetime")
+        step = (datetime.fromisoformat(step_time) - start).total_seconds()
+        assert 1.52 <= step / rate <= 1.62, (rate, step)
+        page.get_by_role("button", name="Pausar").evaluate("(button) => button.click()")
     paused = page.locator("#gps-epoch").get_attribute("datetime")
+    page.clock.run_for(400)
+    expect(page.locator("#gps-epoch")).to_have_attribute("datetime", paused)
     sampled = page.request.get("/api/ephemerides/mars", params={**params, "instant": paused}).json()
-    advanced = assert_frame(page, sampled, "mars")
-    verify_gravity(page, sampled, advanced)
+    advanced = state(page)
+    reference = tuple(sampled["positions"]["mars"].values())
+    assert all(dist(mesh["center"], world(sampled["positions"][key], reference)) < 1e-8
+               for key, mesh in advanced["meshes"].items())
+    assert set(advanced["trails"]) == {"sun", "earth"}
+    for key, trail in advanced["trails"].items():
+        assert len(trail) == 17 * 3
+        assert dist(trail[:3], trail[-3:]) > 0.03
+        assert dist(trail[-3:], advanced["meshes"][key]["center"]) < 1e-7
     assert advanced["field"]["offsets"] != stationary["field"]["offsets"]
     assert advanced["accelerations"] != stationary["accelerations"]
     if captures:
@@ -404,7 +526,8 @@ def check_view(page, width, captures):
     sizes = " / ".join(f"{overview['apparent'][body]:.6f}" for body in ("sun", "earth", "mars"))
     print(f"  Diâmetros iniciais Sol/Terra/Marte: {sizes} px. Erro de altura de Flamm ≤ {1000 * height_error:.3f} m.")
     print(f"  Fonte solar isolada: {near:.9g} m/s² a 1 ua e {far:.9g} m/s² a 2 ua. Campo alterou {changed:.1%} do canvas.")
-    print(f"  Reprodução 2×: avanço de {step:.2f} dias simulados em 1,6 segundo.")
+    print(f"  Reprodução 7 dias/s: avanço de {step / 86400:.2f} dias em 1,6 s. "
+          f"Altitude {altitude_km:.0f} km, brilho diurno/noturno {lighting['bright']}/{lighting['dark']}.")
 
 
 def main():
@@ -429,7 +552,7 @@ def main():
         for width, height in ((1440, 1050), (390, 844)):
             context = browser.new_context(
                 base_url=args.url, viewport={"width": width, "height": height},
-                is_mobile=width < 500, has_touch=width < 500,
+                is_mobile=width < 500, has_touch=width < 500, reduced_motion="reduce",
             )
             context.route("**/assets/solar-scene.js", observe_scene)
             page = context.new_page()

@@ -3,24 +3,27 @@
 
   const physics = window.gpsPhysics;
   const BODIES = {
-    sun: { label: "Sol", color: "#ffd48b", ...physics.RADII_KM.sun, visualRadius: 0.15, pole: [286.13, 63.87] },
-    earth: { label: "Terra", color: "#7ac8f6", ...physics.RADII_KM.earth, visualRadius: 0.11, pole: [0, 90] },
-    mars: { label: "Marte", color: "#f59879", ...physics.RADII_KM.mars, visualRadius: 0.07, pole: [317.27, 54.43] },
+    sun: { label: "Sol", color: "#ffd48b", radiusKm: physics.RADII_KM.sun, visualRadius: 0.15, pole: [286.13, 63.87] },
+    earth: { label: "Terra", color: "#7ac8f6", radiusKm: physics.RADII_KM.earth, visualRadius: 0.11, pole: [0, 90] },
+    mars: { label: "Marte", color: "#f59879", radiusKm: physics.RADII_KM.mars, visualRadius: 0.07, pole: [317.27, 54.43] },
   };
+  const BODY_LOCATION = { sun: "no Sol", earth: "na Terra", mars: "em Marte" };
   const AXES = ["x", "y", "z"];
   const UNAVAILABLE = "Data fora da cobertura. Use um instante UTC entre 2000 e 2049.";
   const INVALID_INTERVAL = "O fim do recorte deve ser posterior ao início.";
-  const PLAYBACK_DURATION_MS = 36_000;
+
   const formatNumber = new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 4, minimumFractionDigits: 4,
   });
   const formatDiameter = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+  const formatWhole = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+  const formatRatio = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatSpeed = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3, minimumFractionDigits: 3 });
   const formatScale = new Intl.NumberFormat("pt-BR", { maximumSignificantDigits: 3 });
   const formatAcceleration = new Intl.NumberFormat("pt-BR", {
     notation: "scientific", maximumSignificantDigits: 4,
   });
-  const formatEpoch = (instant) => instant.replace("T", " ").replace("Z", " UTC");
+  const formatEpoch = (instant) => `${instant.slice(0, 19).replace("T", " ")} UTC`;
   const inputInstant = (value) => `${value.length === 16 ? value + ":00" : value}Z`;
 
   function distance(a, b) {
@@ -59,6 +62,17 @@
     const free = find("#gps-free");
     const playbackRate = find("#gps-playback-rate");
     const referenceSelect = find("#gps-reference");
+    const compare = find("#gps-compare-3d");
+    const outsideEarth = find("#gps-outside-earth");
+    const pairSelect = find("#gps-measure-pair");
+    const measureValue = find("#gps-measure-value");
+    const measureAu = find("#gps-measure-au");
+    const measureKm = find("#gps-measure-km");
+    const ruler = find("#gps-view-scale");
+    const rulerPlane = find("#gps-view-scale-plane");
+    const rulerValue = find("#gps-view-scale-value");
+    const rulerBar = find("#gps-view-scale-bar");
+    const cameraRange = find("#gps-view-range");
     const speedLabels = Object.fromEntries(Object.keys(BODIES).map((body) => [body, find(`#gps-speed-${body}`)]));
     const speedBars = Object.fromEntries(Object.keys(BODIES).map((body) => [body, find(`#gps-speed-bar-${body}`)]));
     const speedAxis = find("#gps-speed-axis");
@@ -75,10 +89,18 @@
     const clockButtons = root.querySelectorAll("[data-gps-clock]");
     const scaleButtons = root.querySelectorAll("[data-gps-scale]");
 
+    const solarRadius = BODIES.sun.radiusKm;
+    find("#gps-diameter-ratio").textContent = `${formatRatio.format(solarRadius / BODIES.earth.radiusKm)} vezes`;
+    for (const [key, { radiusKm }] of Object.entries(BODIES)) {
+      find(`[data-diameter-disk="${key}"]`).style.setProperty("--diameter-ratio", radiusKm / solarRadius);
+      find(`[data-diameter-value="${key}"]`).textContent = `${formatDiameter.format(2 * radiusKm)} km`;
+    }
+
     let scene = null;
     let initialized = false;
     let active = false;
-    let liveWindow = null;
+    let cutWindow = null;
+    let resumeOnActivate = true;
     let range = null;
     let orbitExtents = {};
     let orbitSamples = null;
@@ -90,9 +112,9 @@
     let apparentSizes = {};
     let selected = "mars";
     let reference = "sun";
-    let mode = "live";
+    let mode = "simulation";
+    let cameraLabel = "Navegação livre";
     let activeRequest = null;
-    let refreshTimer = null;
     let playTimer = null;
 
     function setStatus(message, state = "") {
@@ -104,10 +126,11 @@
       const body = BODIES[selected];
       find("#gps-body-name").textContent = body.label;
       focus.disabled = !scene || !positions;
+      outsideEarth.disabled = focus.disabled;
       if (!positions) return;
       const position = framePositions[selected];
       for (const axis of AXES) find(`#gps-coordinate-${axis}`).textContent = formatNumber.format(position[axis]);
-      find("#gps-body-diameter").textContent = `${formatDiameter.format(2 * body.equatorialKm)} km`;
+      find("#gps-body-diameter").textContent = `${formatDiameter.format(2 * body.radiusKm)} km`;
       find("#gps-distance-sun").textContent = `${formatNumber.format(distance(positions[selected], positions.sun))} ua`;
       find("#gps-distance-earth").textContent = `${formatNumber.format(distance(positions[selected], positions.earth))} ua`;
       const extent = orbitExtents[selected];
@@ -168,6 +191,32 @@
       if (apparentLabel.textContent !== text) apparentLabel.textContent = text;
     }
 
+    function updateMeasurement() {
+      const [first, second] = pairSelect.value.split("-");
+      measureValue.hidden = !positions || !second;
+      if (measureValue.hidden) return;
+      const distanceAu = distance(positions[first], positions[second]);
+      measureAu.textContent = `${formatNumber.format(distanceAu)} ua`;
+      measureKm.textContent = `${formatWhole.format(distanceAu * physics.AU_KM)} km`;
+    }
+
+    function showViewScale(scale) {
+      ruler.hidden = !scale;
+      if (!scale) return;
+      const plane = scale.rangeKm === null ? "Régua comum" : `Régua ${BODY_LOCATION[scale.key]}`;
+      const length = `${formatScale.format(scale.length)} ${scale.unit}`;
+      if (rulerPlane.textContent !== plane) rulerPlane.textContent = plane;
+      if (rulerValue.textContent !== length) rulerValue.textContent = length;
+      rulerBar.style.width = `${scale.pixels.toFixed(2)}px`;
+      cameraRange.hidden = scale.rangeKm === null;
+      if (cameraRange.hidden) return;
+      const value = scale.rangeKm >= physics.AU_KM / 10
+        ? `${formatScale.format(scale.rangeKm / physics.AU_KM)} ua`
+        : `${formatWhole.format(scale.rangeKm)} km`;
+      const label = `Câmera–centro · ${value}`;
+      if (cameraRange.textContent !== label) cameraRange.textContent = label;
+    }
+
     function selectBody(key, center = true) {
       if (key !== selected) {
         gravitySelect.value = "total";
@@ -187,7 +236,8 @@
       const frameVelocities = velocities && physics.relativeVectors(velocities, reference);
       accelerations = gravityToggle.checked ? physics.gravitationalAccelerations(positions) : null;
       showSpeeds(frameVelocities);
-      scene?.showPositions(framePositions, frameVelocities, accelerations);
+      scene?.showPositions(framePositions, frameVelocities, accelerations, reference, trailSamples());
+      updateMeasurement();
       updateReadout();
     }
 
@@ -198,13 +248,41 @@
       showFrame();
     }
 
-    function showSample(index) {
-      const { trajectory, geometry } = range.data;
-      const { instant_utc, earth, mars, velocities_km_s } = trajectory[index];
-      range.index = index;
-      slider.value = index;
-      slider.setAttribute("aria-valuetext", formatEpoch(instant_utc));
-      showPositions(instant_utc, { sun: geometry.positions.sun, earth, mars }, velocities_km_s);
+    function upperSample(time) {
+      let first = 0;
+      let last = range.times.length - 1;
+      while (first < last) {
+        const middle = Math.floor((first + last) / 2);
+        if (range.times[middle] < time) first = middle + 1;
+        else last = middle;
+      }
+      return first;
+    }
+
+    function stateAt(time, upper = upperSample(time)) {
+      return physics.interpolateEphemeris(range.data.trajectory, range.times, time, upper);
+    }
+
+    function trailSamples() {
+      if (!range) return [];
+      const startTime = Math.max(range.times[0], range.time - physics.TRAIL_MS);
+      if (range.time <= startTime) return [];
+      return Array.from({ length: physics.TRAIL_POINTS }, (_, index) => {
+        const time = startTime + (range.time - startTime) * index / (physics.TRAIL_POINTS - 1);
+        return physics.relativeVectors(stateAt(time).positions, reference);
+      });
+    }
+
+    function showTime(instant) {
+      const time = Math.max(range.times[0], Math.min(instant, range.times.at(-1)));
+      range.time = time;
+      const upper = upperSample(time);
+      const state = stateAt(time, upper);
+      const timestamp = range.times[upper] === time ? range.data.trajectory[upper].instant_utc : new Date(time).toISOString();
+      slider.value = range.times[upper] === time ? upper : Math.max(0, upper - 1);
+      const label = formatEpoch(timestamp);
+      if (slider.getAttribute("aria-valuetext") !== label) slider.setAttribute("aria-valuetext", label);
+      showPositions(timestamp, state.positions, state.velocities);
     }
 
     function loadOrbits(samples) {
@@ -227,7 +305,7 @@
     function setReference(next) {
       if (positions) scene?.shiftReference(physics.subtract(positions[reference], positions[next]));
       reference = next;
-      find("#gps-frame-origin").textContent = { sun: "no Sol", earth: "na Terra", mars: "em Marte" }[reference];
+      find("#gps-frame-origin").textContent = BODY_LOCATION[reference];
       find("#gps-readout-origin").textContent = BODIES[reference].label;
       for (const [body, label] of Object.entries(BODIES)) {
         const track = find(`#gps-${body}-track`);
@@ -239,21 +317,31 @@
       showFrame();
     }
 
-    function showRange(data, isDemo, index) {
-      range = { data, isDemo, index };
+    function showRange(data, isDemo, instant = utcMilliseconds(data.geometry.instant_utc)) {
       const samples = data.trajectory;
+      range = { data, isDemo, times: samples.map((sample) => utcMilliseconds(sample.instant_utc)), time: instant };
       const first = samples[0].instant_utc;
       const last = samples.at(-1).instant_utc;
-      start.value = first.slice(0, 19);
-      end.value = last.slice(0, 19);
+      if (mode === "range") {
+        start.value = first.slice(0, 19);
+        end.value = last.slice(0, 19);
+      }
       showInstant(find("#gps-range-start"), first);
       showInstant(find("#gps-range-end"), last);
       find("#gps-source").textContent = isDemo ? "Demonstração local" : data.geometry.model;
+      find(".gps-time").hidden = false;
       slider.max = samples.length - 1;
       slider.disabled = false;
       play.disabled = false;
       loadOrbits(samples);
-      showSample(index);
+      showTime(instant);
+    }
+
+    function updateMotionClock() {
+      const clock = find("#gps-movement-clock");
+      const rate = mode === "live" ? "1 s/s" : playbackRate.selectedOptions[0].textContent;
+      clock.textContent = playTimer === null ? "Simulação pausada" : `Em movimento · ${rate}`;
+      playbackRate.disabled = mode === "live";
     }
 
     function stopPlayback() {
@@ -263,127 +351,110 @@
       updateMotionClock();
     }
 
-    function playbackSpeed() {
-      const samples = range.data.trajectory;
-      const duration = utcMilliseconds(samples.at(-1).instant_utc) - utcMilliseconds(samples[0].instant_utc);
-      return Number(playbackRate.value) * duration / PLAYBACK_DURATION_MS;
-    }
-
-    function updateMotionClock() {
-      const clock = find("#gps-movement-clock");
+    function startPlayback() {
+      if (!range || playTimer !== null) return;
+      const endTime = range.times.at(-1);
       if (mode === "live") {
-        clock.textContent = "Tempo real · 1 s/s";
-      } else if (playTimer === null) {
-        clock.textContent = "Recorte pausado";
-      } else {
-        const rate = playbackSpeed();
-        const display = rate >= 86400 ? `${formatSpeed.format(rate / 86400)} dias/s` : `${formatSpeed.format(rate)} s/s`;
-        clock.textContent = `Reprodução · ${display}`;
+        const now = Date.now();
+        if (now < range.times[0] || now >= endTime) {
+          loadWindow(now, true);
+          return;
+        }
+        showTime(now);
+      } else if (range.time >= endTime) {
+        showTime(range.times[0]);
       }
-    }
-
-    function togglePlayback() {
-      if (playTimer !== null) {
-        stopPlayback();
-        return;
-      }
-      const last = Number(slider.max);
-      if (range.index === last) showSample(0);
-      const sampleTimes = range.data.trajectory.map((sample) => utcMilliseconds(sample.instant_utc));
-      const startTime = sampleTimes[range.index];
-      const speed = playbackSpeed();
+      const startTime = range.time;
       const startFrame = performance.now();
+      const speed = mode === "live" ? 1 : Number(playbackRate.value);
+      let lastPaint = -Infinity;
       play.textContent = "Pausar";
       function advance(now) {
-        const simulatedTime = startTime + (now - startFrame) * speed;
-        let next = range.index;
-        while (next < last && sampleTimes[next + 1] <= simulatedTime) next += 1;
-        if (next !== range.index) showSample(next);
-        if (next === last) stopPlayback();
-        else playTimer = requestAnimationFrame(advance);
+        const instant = startTime + (now - startFrame) * speed;
+        // Keep the simulated clock tied to elapsed time even on slower renderers.
+        if (now - lastPaint >= 28 || instant >= endTime) {
+          showTime(instant);
+          lastPaint = now;
+        }
+        if (instant < endTime) {
+          playTimer = requestAnimationFrame(advance);
+          return;
+        }
+        stopPlayback();
+        if (mode !== "range" && !range.isDemo && endTime < Date.UTC(2049, 11, 31, 23, 59, 59)) {
+          loadWindow(endTime, true);
+        }
       }
       playTimer = requestAnimationFrame(advance);
       updateMotionClock();
     }
 
+    function togglePlayback() {
+      if (playTimer === null) startPlayback();
+      else stopPlayback();
+    }
+
     function cancelRequests() {
-      clearTimeout(refreshTimer);
-      refreshTimer = null;
       activeRequest?.abort();
       activeRequest = null;
     }
 
     function beginRequest() {
-      activeRequest?.abort();
+      cancelRequests();
       const controller = new AbortController();
       activeRequest = controller;
       return controller;
     }
 
-    async function refreshLive() {
-      if (!active || mode !== "live") return;
-      const now = new Date().toISOString().slice(0, 19);
-      const instant = `${now}Z`;
-      const needsWindow = !liveWindow || now > liveWindow.trajectory.at(-1).instant_utc.slice(0, 19) ||
-        now < liveWindow.trajectory[0].instant_utc.slice(0, 19);
+    async function loadWindow(instant, autoplay) {
       const controller = beginRequest();
-      let delay = 1000;
+      play.disabled = true;
+      slider.disabled = true;
+      liveState.textContent = "Carregando efemérides…";
       try {
-        const result = await requestApi(needsWindow ? "/ephemerides/solar-system" : "/ephemerides/mars", { instant, velocities: true }, {
-          signal: controller.signal,
-          timeoutMs: 6500,
-        });
+        const result = await requestApi("/ephemerides/solar-system", {
+          instant: new Date(instant).toISOString(), velocities: true,
+        }, { signal: controller.signal, timeoutMs: 6500 });
         if (controller.signal.aborted) return;
-        if (needsWindow) {
-          liveWindow = result;
-          loadOrbits(result.trajectory);
-        }
-        const geometry = needsWindow ? result.geometry : result;
-        showPositions(geometry.instant_utc, geometry.positions, geometry.velocities_km_s);
-        liveState.textContent = "Acompanhando o relógio UTC";
+        showRange(result, false);
+        liveState.textContent = mode === "live" ? "Acompanhando o relógio UTC" : "Efemérides da simulação";
         setStatus("");
-        delay = 1000 - Date.now() % 1000;
+        if (autoplay) startPlayback();
       } catch (error) {
         if (controller.signal.aborted) return;
-        if (!liveWindow || error.status === 422) {
-          selectMode("range");
-          setStatus(error.status === 422 ? UNAVAILABLE : "Tempo real indisponível. Verifique o servidor Python.", "error");
-          return;
+        if (!range) {
+          showRange(window.solarDemo, true);
+          liveState.textContent = "Demonstração local";
+          if (autoplay) startPlayback();
+        } else {
+          liveState.textContent = "Último intervalo recebido";
+          play.disabled = false;
+          slider.disabled = false;
         }
-        delay = 3000;
-        liveState.textContent = "Último instante recebido";
-        setStatus("Conexão interrompida. Tentando atualizar novamente…", "error");
+        setStatus(error.status === 422 ? UNAVAILABLE : "Efemérides indisponíveis. Verifique o servidor Python.", "error");
       } finally {
         if (activeRequest === controller) activeRequest = null;
       }
-      if (!controller.signal.aborted) refreshTimer = setTimeout(refreshLive, delay);
     }
 
     function selectMode(next) {
       if (next === mode) return;
+      if (mode === "range") cutWindow = range;
       stopPlayback();
       cancelRequests();
       mode = next;
       updateMotionClock();
       for (const button of clockButtons) button.setAttribute("aria-pressed", String(button.dataset.gpsClock === mode));
-      const isLive = mode === "live";
-      find("#gps-cut-fields").hidden = isLive;
-      find(".gps-time").hidden = isLive;
-      liveState.hidden = !isLive;
+      find("#gps-cut-fields").hidden = mode !== "range";
+      liveState.hidden = mode === "range";
       setStatus("");
-      if (isLive) {
-        liveState.textContent = "Sincronizando o relógio UTC…";
-        if (liveWindow) loadOrbits(liveWindow.trajectory);
-        refreshLive();
-      } else {
-        if (range) {
-          showRange(range.data, range.isDemo, range.index);
-        } else {
-          const data = liveWindow ?? window.solarDemo;
-          const index = data.trajectory.findIndex((sample) => sample.instant_utc === data.geometry.instant_utc);
-          showRange(data, !liveWindow, index);
-        }
+      if (mode === "range") {
+        const selectedWindow = cutWindow ?? range;
+        if (selectedWindow) showRange(selectedWindow.data, selectedWindow.isDemo, selectedWindow.time);
+        else showRange(window.solarDemo, true);
         if (range.isDemo) setStatus("A demonstração usa o recorte incluído. Para consultar outras datas, execute python app.py.");
+      } else {
+        loadWindow(Date.now(), true);
       }
     }
 
@@ -404,7 +475,7 @@
           timeoutMs: 6500,
         });
         if (controller.signal.aborted) return;
-        showRange(result, false, 0);
+        showRange(result, false);
         setStatus("Recorte aplicado.");
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -422,15 +493,19 @@
     for (const button of clockButtons) button.addEventListener("click", () => selectMode(button.dataset.gpsClock));
     slider.addEventListener("input", () => {
       stopPlayback();
-      showSample(Number(slider.value));
+      showTime(range.times[Number(slider.value)]);
     });
     play.addEventListener("click", togglePlayback);
     playbackRate.addEventListener("change", () => {
       if (playTimer === null) return;
       stopPlayback();
-      togglePlayback();
+      startPlayback();
     });
     referenceSelect.addEventListener("change", () => setReference(referenceSelect.value));
+    pairSelect.addEventListener("change", () => {
+      scene?.setMeasuredPair(pairSelect.value ? pairSelect.value.split("-") : []);
+      updateMeasurement();
+    });
     find("#gps-show-velocities").addEventListener("change", (event) => scene?.setVelocityVisibility(event.target.checked));
     gravityToggle.addEventListener("change", () => {
       find("#gps-gravity-legend").hidden = !gravityToggle.checked;
@@ -443,16 +518,26 @@
       scene?.setCurvature(event.target.checked);
     });
     for (const button of bodyButtons) button.addEventListener("click", () => selectBody(button.dataset.gpsBody));
+    function chooseScale(scale) {
+      for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option.dataset.gpsScale === scale));
+      find("#gps-scale-note").textContent = scale === "real"
+        ? "Diâmetros e distâncias na mesma escala. ◇ indica menos de 2 px. Selecione um astro para se aproximar."
+        : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
+      scene?.setScale(scale);
+    }
+
     for (const button of scaleButtons) {
       button.addEventListener("click", () => {
-        const scale = button.dataset.gpsScale;
-        for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option === button));
-        find("#gps-scale-note").textContent = scale === "real"
-          ? "Diâmetros e distâncias na mesma escala. ◇ indica menos de 1 px. Selecione um astro para inspecionar em 3D."
-          : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
-        scene?.setScale(scale);
+        scene?.setComparison(false);
+        chooseScale(button.dataset.gpsScale);
       });
     }
+    compare.addEventListener("click", () => scene?.setComparison(compare.getAttribute("aria-pressed") !== "true"));
+    outsideEarth.addEventListener("click", () => {
+      chooseScale("real");
+      selectBody("earth", false);
+      scene?.outsideEarth();
+    });
     focus.addEventListener("click", () => {
       scene?.focus(selected);
       canvas.focus();
@@ -474,6 +559,8 @@
       selectBody,
       deactivate() {
         active = false;
+        resumeOnActivate = playTimer !== null || !range;
+        scene?.stopApproach();
         stopPlayback();
         cancelRequests();
         if (status.dataset.state === "loading") setStatus("");
@@ -486,10 +573,23 @@
           try {
             scene = window.createSolarScene(stage, BODIES, {
               onSelect: selectBody,
-              onTarget: (key) => {
-                find("#gps-camera-target").textContent = key ? `Foco em ${BODIES[key].label}` : "Navegação livre";
+              onTarget: (key, approaching = false, preset = false) => {
+                const target = find("#gps-camera-target");
+                cameraLabel = preset ? "Fora da Terra → Sol" : approaching ? `Aproximação · ${BODIES[key].label}` :
+                  key ? `Foco ${BODY_LOCATION[key]}` : "Navegação livre";
+                target.textContent = cameraLabel;
                 free.setAttribute("aria-pressed", String(key === null));
                 gravityFocus.hidden = key === null;
+                find("#gps-earth-view-note").hidden = !preset;
+              },
+              onComparison: (enabled) => {
+                compare.setAttribute("aria-pressed", String(enabled));
+                find("#gps-camera-target").textContent = enabled ? "Comparação em escala real" : cameraLabel;
+                find("#gps-comparison-note").hidden = !enabled;
+                find("#gps-earth-view-note").hidden = enabled || cameraLabel !== "Fora da Terra → Sol";
+                find(".gps-measure").hidden = enabled;
+                find("#gps-zoom-in").disabled = enabled;
+                find("#gps-zoom-out").disabled = enabled;
               },
               onMissingTextures: (names) => {
                 const notice = find("#gps-texture-status");
@@ -500,6 +600,7 @@
                 apparentSizes = sizes;
                 updateApparentSize();
               },
+              onViewScale: showViewScale,
               onVelocityScale: (scale) => {
                 velocityLegend.hidden = scale === null;
                 if (scale !== null) {
@@ -508,6 +609,7 @@
                 }
               },
             });
+            if (pairSelect.value) scene.setMeasuredPair(pairSelect.value.split("-"));
             selectBody(selected, false);
           } catch (error) {
             console.warn("Falha ao iniciar a cena 3D.", error);
@@ -516,14 +618,16 @@
           }
           if (location.protocol === "file:") {
             selectMode("range");
+            startPlayback();
             return;
           }
         }
         scene?.resize();
-        if (mode === "live") {
+        if (range) {
+          if (resumeOnActivate) startPlayback();
+        } else {
           liveState.hidden = false;
-          liveState.textContent = "Sincronizando o relógio UTC…";
-          refreshLive();
+          loadWindow(Date.now(), true);
         }
       },
     };

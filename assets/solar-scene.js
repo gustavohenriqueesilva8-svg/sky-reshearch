@@ -7,21 +7,27 @@
   const MIN_CLEARANCE_RADII = 0.06;
   const GRAVITY_INK = "#e1ceff";
   const GRAVITY_ARROW_OFFSETS = { sun: -10, earth: 0, mars: 10 };
-  const PLANET_SURFACES = {
-    earth: { roughness: 0.78, emissive: 0x193766, emissiveIntensity: 0.12 },
-    mars: { roughness: 1, emissive: 0x6a2715, emissiveIntensity: 0.1 },
-  };
+  const GRAVITY_VECTOR_LENGTH_AU = 0.36;
+  const STAR_SPHERE_AU = 600;
+  const OVERVIEW_FOV = 42;
+  const EARTH_ALTITUDE_AU = 5_000 / physics.AU_KM;
 
-  window.createSolarScene = (stage, bodies, { onSelect, onTarget, onMissingTextures, onApparentSizes, onVelocityScale }) => {
+  window.createSolarScene = (stage, bodies, {
+    onSelect, onTarget, onMissingTextures, onApparentSizes, onVelocityScale, onViewScale, onComparison,
+  }) => {
     const THREE = window.SkyThree;
     const canvas = stage.querySelector("canvas");
     const renderError = stage.querySelector("#gps-render-error");
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     const overlay = stage.querySelector(".gps-vector-overlay");
     const ink = overlay.getContext("2d");
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 30);
+    scene.background = new THREE.Color("#080f1c");
+    const comparisonScene = new THREE.Scene();
+    comparisonScene.background = scene.background;
+    const camera = new THREE.PerspectiveCamera(OVERVIEW_FOV, 1, 1e-8, STAR_SPHERE_AU * 2);
+    const comparisonCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1e-8, 1);
     const overview = new THREE.Vector3(2.65, 2.65, 4.7);
     camera.position.copy(overview);
 
@@ -35,32 +41,102 @@
     // Rotate the astronomical frame by -90° around X to use Y as scene up.
     // Every center already comes in au. Physical radii are converted to au once.
     const toWorld = ({ x, y, z }) => new THREE.Vector3(x, z, -y);
-    const grid = new THREE.GridHelper(4, 8, 0x516b87, 0x334663);
-    grid.material.transparent = true;
-    grid.material.opacity = 0.62;
+    const eclipticAt = (radius, angle) => new THREE.Vector3(
+      radius * Math.cos(angle),
+      radius * Math.sin(angle) * Math.sin(physics.OBLIQUITY_J2000),
+      -radius * Math.sin(angle) * Math.cos(physics.OBLIQUITY_J2000),
+    );
+    const eclipticNormal = new THREE.Vector3(0, Math.cos(physics.OBLIQUITY_J2000), Math.sin(physics.OBLIQUITY_J2000));
+    const origin = new THREE.Vector3();
+    const gridInk = new THREE.LineBasicMaterial({ color: 0x536d8f, transparent: true, depthWrite: false });
+    const grid = new THREE.Group();
+    const ticks = [];
+    for (const radius of [0.5, 1, 1.5, 2]) {
+      const points = Array.from({ length: 129 }, (_, i) => eclipticAt(radius, i * Math.PI / 64));
+      grid.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridInk));
+      if (radius < 2) ticks.push([`ring-${radius}`, eclipticAt(radius, Math.PI * 1.12)]);
+    }
+    const spokes = Array.from({ length: 8 }, (_, i) => [origin, eclipticAt(2, i * Math.PI / 4)]).flat();
+    grid.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(spokes), gridInk));
     scene.add(grid);
 
-    const axes = [
-      ["x", toWorld({ x: 2.15, y: 0, z: 0 }), 0xcd9a73],
-      ["y", toWorld({ x: 0, y: 2.15, z: 0 }), 0x65b4c6],
-      ["z", toWorld({ x: 0, y: 0, z: 1.35 }), 0xa1a5d8],
-    ];
-    const origin = new THREE.Vector3();
-    for (const [, tip, color] of axes) {
-      const geometry = new THREE.BufferGeometry().setFromPoints([origin, tip]);
-      scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color })));
+    const starCoords = [];
+    const starColors = [];
+    const starColor = new THREE.Color();
+    let seed = 21413;
+    function randomStar() {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 2 ** 32;
     }
+    for (let i = 0; i < 4000; i += 1) {
+      const y = 2 * randomStar() - 1;
+      const angle = 2 * Math.PI * randomStar();
+      const r = Math.sqrt(1 - y * y);
+      starCoords.push(STAR_SPHERE_AU * r * Math.cos(angle), STAR_SPHERE_AU * y, STAR_SPHERE_AU * r * Math.sin(angle));
+      const strength = 0.13 + 0.72 * randomStar() ** 4;
+      starColor.set(i % 5 ? 0xc1d2ef : 0xf4d6a9).multiplyScalar(strength ** 2);
+      starColors.push(starColor.r, starColor.g, starColor.b);
+    }
+    const starGeometry = new THREE.BufferGeometry()
+      .setAttribute("position", new THREE.Float32BufferAttribute(starCoords, 3))
+      .setAttribute("color", new THREE.Float32BufferAttribute(starColors, 3));
+    const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({
+      vertexColors: true, size: 1.35, sizeAttenuation: false, depthWrite: false,
+    }));
+    scene.add(stars);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
-    const sunlight = new THREE.PointLight(0xffe7cc, 2.5, 0, 0);
+    const baseline = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([origin, origin]),
+      new THREE.LineBasicMaterial({ color: 0xf0e5cc, transparent: true, opacity: 0.8, depthWrite: false }),
+    );
+    baseline.visible = false;
+    baseline.frustumCulled = false;
+    scene.add(baseline);
+    const ruler = stage.querySelector("#gps-view-scale");
+    const sunlight = new THREE.PointLight(0xfff1df, 4.6, 0, 2);
     scene.add(sunlight);
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: { glow: { value: new THREE.Color("#ffb45c") } },
+      transparent: true, depthWrite: false,
+      vertexShader: `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec2 haloUv;
+        void main() {
+          haloUv = uv * 2.0 - 1.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `
+        #include <logdepthbuf_pars_fragment>
+        uniform vec3 glow;
+        varying vec2 haloUv;
+        void main() {
+          #include <logdepthbuf_fragment>
+          float r = length(haloUv);
+          float a = 0.38 * exp(-6.5 * max(0.0, r - 0.36)) * (1.0 - smoothstep(0.78, 1.0, r));
+          gl_FragColor = vec4(glow, a);
+          #include <colorspace_fragment>
+        }`,
+    }));
+    halo.visible = false;
+    scene.add(halo);
     const labels = Object.fromEntries(Array.from(stage.querySelectorAll("[data-scene-label]"),
       (element) => [element.dataset.sceneLabel, element]));
     const meshes = {};
+    const comparisonMeshes = {};
     const paths = {};
+    const trails = {};
     const textures = new THREE.TextureLoader();
     const missingTextures = new Set();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let approachFrame = null;
     let trackedBody = null;
+    let comparing = false;
+    let earthPreset = false;
+    let earthAltitude = EARTH_ALTITUDE_AU;
+    let frameReference = "sun";
+    let measuredPair = [];
     let freeReference = overview.length();
     let contextAvailable = true;
     let velocities = null;
@@ -79,8 +155,8 @@
       }
     }
 
-    function screenPoint(view, width, height) {
-      const point = view.clone().applyMatrix4(camera.projectionMatrix);
+    function screenPoint(view, width, height, viewing = camera) {
+      const point = view.clone().applyMatrix4(viewing.projectionMatrix);
       return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 };
     }
 
@@ -90,13 +166,20 @@
 
     function placeBodyLabel(label, center, width, height, occupied) {
       const { x, y, diameterPx, silhouette } = center;
-      const subpixel = diameterPx < 1;
+      const subpixel = diameterPx < 2;
       label.toggleAttribute("data-subpixel", subpixel);
+      label.toggleAttribute("data-comparison-marker", comparing && subpixel);
       label.removeAttribute("data-marker-only");
-      if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a um pixel.");
+      if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a dois pixels.");
       else label.removeAttribute("aria-description");
       label.hidden = x < 0 || x > width || y < 0 || y > height;
       if (label.hidden) return;
+      if (comparing && subpixel) {
+        label.removeAttribute("data-left");
+        label.style.left = `${x}px`;
+        label.style.top = `${y}px`;
+        return;
+      }
       const fits = (box) => box.left >= 0 && box.right <= width && box.top >= 0 && box.bottom <= height &&
         !occupied.some((other) => overlaps(box, other));
       if (subpixel) {
@@ -148,16 +231,21 @@
       const dy = tip.y - y;
       const length = Math.hypot(dx, dy);
       const gap = Math.max(9, diameterPx / 2 + 4);
-      if (length - gap < 9) return;
+      if (!Number.isFinite(length) || length - gap < 9) return;
       const ux = dx / length;
       const uy = dy / length;
       // Separate parallel gravity arrows in projection while preserving their bearing.
       const offset = vector.offset ?? 0;
       const ox = Math.abs(uy) * offset;
       const oy = -ux * (Math.sign(uy) || 1) * offset;
-      tip.x += ox;
-      tip.y += oy;
-      const head = Math.min(12, (length - gap) * 0.64);
+      const horizontal = ux === 0 ? Infinity : ((ux > 0 ? width : 0) - x - ox) / ux;
+      const vertical = uy === 0 ? Infinity : ((uy > 0 ? height : 0) - y - oy) / uy;
+      const visibleLength = Math.min(length, horizontal, vertical);
+      if (visibleLength - gap < 9) return;
+      const clipped = visibleLength < length;
+      tip.x = x + ox + ux * visibleLength;
+      tip.y = y + oy + uy * visibleLength;
+      const head = clipped ? 0 : Math.min(12, (visibleLength - gap) * 0.64);
       const arrowBase = { x: tip.x - ux * head, y: tip.y - uy * head };
       const dash = vector.gravity ? [5, 4] : [];
 
@@ -174,6 +262,7 @@
       ink.lineWidth = vector.gravity ? 2 : 3.25;
       ink.stroke();
       ink.setLineDash([]);
+      if (clipped) return;
       ink.beginPath();
       ink.moveTo(tip.x, tip.y);
       ink.lineTo(arrowBase.x - uy * head * 0.45, arrowBase.y + ux * head * 0.45);
@@ -225,32 +314,10 @@
     }
 
     const viewRotation = new THREE.Matrix3();
-    function fitFocusVector(delta, depth, width, height) {
-      // Keep the focused arrowhead on screen by limiting its 3D length at the frustum.
-      const tipOffset = delta.clone().applyMatrix3(viewRotation);
-      const pixelsPerSlope = height * camera.projectionMatrix.elements[5] / 2;
-      const horizontal = (width / 2 - 18) / pixelsPerSlope;
-      const vertical = (height / 2 - 18) / pixelsPerSlope;
-      if (horizontal <= 0 || vertical <= 0) return 1;
-      return depth / Math.max(depth,
-        tipOffset.z + Math.abs(tipOffset.x) / horizontal,
-        tipOffset.z + Math.abs(tipOffset.y) / vertical);
-    }
-
     function drawVectors(centers, width, height, occupied) {
       ink.clearRect(0, 0, width, height);
       viewRotation.setFromMatrix4(camera.matrixWorldInverse);
-      const frameDistance = trackedBody ? camera.position.distanceTo(controls.target) : freeReference;
-      const focusFactor = Math.min(1, camera.aspect);
-      const speed = (key) => toWorld(velocities[key]).length();
-      const referenceSpeed = velocities && (
-        (trackedBody && speed(trackedBody)) || Math.max(...Object.keys(velocities).map(speed))
-      );
-      let velocityScale = referenceSpeed && frameDistance * (trackedBody ? 0.43 * focusFactor : 0.15) / referenceSpeed;
-      if (trackedBody && velocityScale) {
-        const focusedDelta = toWorld(velocities[trackedBody]).multiplyScalar(velocityScale);
-        velocityScale *= fitFocusVector(focusedDelta, frameDistance, width, height);
-      }
+      const velocityScale = velocities ? physics.VELOCITY_AU_PER_KM_S : null;
       onVelocityScale(showVelocityArrows && velocityScale ? velocityScale : null);
       const annotations = [];
       for (const [key, center] of Object.entries(centers)) {
@@ -258,9 +325,7 @@
         if (accelerations && gravity?.visible) {
           const source = key === trackedBody ? gravitySource : "total";
           const { total, contributions } = accelerations[key];
-          const delta = toWorld(contributions[source] ?? total)
-            .setLength(frameDistance * (trackedBody ? 0.47 * focusFactor : 0.12));
-          if (key === trackedBody) delta.multiplyScalar(fitFocusVector(delta, frameDistance, width, height));
+          const delta = toWorld(contributions[source] ?? total).setLength(GRAVITY_VECTOR_LENGTH_AU);
           paintVector({
             delta, name: source === "total" ? `g · ${name}` : `g · ${name} ← ${bodies[source].label}`,
             color: GRAVITY_INK, gravity: true,
@@ -291,48 +356,106 @@
       return clearance;
     }
 
+    function updateBaseline() {
+      const [first, second] = measuredPair.map((key) => meshes[key]);
+      baseline.visible = Boolean(first?.visible && second?.visible);
+      if (!baseline.visible) return;
+      const vertices = baseline.geometry.getAttribute("position");
+      for (const [i, { position }] of [first, second].entries()) {
+        vertices.setXYZ(i, position.x, position.y, position.z);
+      }
+      vertices.needsUpdate = true;
+    }
+
+    function updateViewScale(pixelsPerSlope, width, viewing) {
+      const key = comparing ? "sun" : trackedBody ?? frameReference;
+      const mesh = comparing ? comparisonMeshes.sun : meshes[key];
+      if (!mesh.visible) {
+        onViewScale(null);
+        return;
+      }
+      const depth = -mesh.position.clone().applyMatrix4(viewing.matrixWorldInverse).z;
+      if (depth <= viewing.near) {
+        onViewScale(null);
+        return;
+      }
+      const auPerPx = (comparing ? 1 : depth) / pixelsPerSlope;
+      const maxAu = Math.min(135, width * 0.37) * auPerPx;
+      const unit = maxAu >= 0.1 ? "ua" : "km";
+      const unitsPerAu = unit === "ua" ? 1 : physics.AU_KM;
+      const maxLength = maxAu * unitsPerAu;
+      const decade = 10 ** Math.floor(Math.log10(maxLength));
+      const length = ([5, 2, 1].find((step) => step * decade <= maxLength) ?? 1) * decade;
+      onViewScale({
+        key, unit, length, pixels: length / (unitsPerAu * auPerPx),
+        rangeKm: comparing ? null : camera.position.distanceTo(mesh.position) * physics.AU_KM,
+      });
+    }
+
     function draw() {
       const { clientWidth: width, clientHeight: height } = stage;
       if (!contextAvailable || !width || !height) return;
-      const near = Math.min(0.02, Math.max(1e-9, nearestSurface() / 4));
-      const far = Math.max(30, camera.position.length() + 5);
-      if (camera.near !== near || camera.far !== far) {
-        camera.near = near;
-        camera.far = far;
-        camera.updateProjectionMatrix();
+      const viewing = comparing ? comparisonCamera : camera;
+      if (comparing) {
+        renderer.render(comparisonScene, comparisonCamera);
+      } else {
+        const clearance = nearestSurface();
+        const t = Math.max(0, Math.min(1, (clearance - 0.0125) / (physics.ZOOM_GRID_LIMIT_AU - 0.0125)));
+        const guideOpacity = t * t * (3 - 2 * t);
+        grid.visible = guideOpacity > 0;
+        gridInk.opacity = 0.7 * guideOpacity;
+        baseline.material.opacity = 0.8 * guideOpacity;
+        for (const path of Object.values(paths)) path.material.opacity = path.userData.opacity * guideOpacity;
+        for (const trail of Object.values(trails)) trail.material.opacity = guideOpacity;
+        halo.quaternion.copy(camera.quaternion);
+        renderer.render(scene, camera);
       }
-      renderer.render(scene, camera);
       const apparentSizes = {};
       const centers = {};
-      const pixelsPerSlope = height * camera.projectionMatrix.elements[5] / 2;
-      for (const [key, mesh] of Object.entries(meshes)) {
+      const pixelsPerSlope = height * viewing.projectionMatrix.elements[5] / 2;
+      for (const [key, mesh] of Object.entries(comparing ? comparisonMeshes : meshes)) {
         if (!mesh.visible) continue;
-        const view = mesh.position.clone().applyMatrix4(camera.matrixWorldInverse);
+        const view = mesh.position.clone().applyMatrix4(viewing.matrixWorldInverse);
         const radius = mesh.scale.x;
         const depth = -view.z;
-        const diameterPx = physics.apparentDiameterPx(radius, depth, view.y, pixelsPerSlope);
+        const diameterPx = comparing ? 2 * radius * pixelsPerSlope :
+          physics.apparentDiameterPx(radius, depth, view.y, pixelsPerSlope);
         apparentSizes[key] = diameterPx;
-        if (diameterPx === null || depth > far) {
+        if (diameterPx === null || depth > viewing.far) {
           labels[key].hidden = true;
           continue;
         }
-        const { x, y } = screenPoint(view, width, height);
-        const shift = pixelsPerSlope * radius ** 2 / (depth * (depth ** 2 - radius ** 2));
+        const { x, y } = screenPoint(view, width, height, viewing);
+        const shift = comparing ? 0 : pixelsPerSlope * radius ** 2 / (depth * (depth ** 2 - radius ** 2));
         const cx = x + shift * view.x;
         const cy = y - shift * view.y;
-        const halfWidth = Math.max(7, physics.apparentDiameterPx(radius, depth, view.x, pixelsPerSlope) / 2);
+        const halfWidth = Math.max(7, comparing ? diameterPx / 2 :
+          physics.apparentDiameterPx(radius, depth, view.x, pixelsPerSlope) / 2);
         const halfHeight = Math.max(7, diameterPx / 2);
         centers[key] = { x, y, view, diameterPx, silhouette: {
           left: cx - halfWidth, top: cy - halfHeight, right: cx + halfWidth, bottom: cy + halfHeight,
         } };
       }
       const occupied = Object.values(centers).map(({ silhouette }) => silhouette);
+      const bounds = overlay.getBoundingClientRect();
+      updateViewScale(pixelsPerSlope, width, viewing);
+      if (!ruler.hidden) {
+        const rect = ruler.getBoundingClientRect();
+        occupied.push({
+          left: rect.left - bounds.left, top: rect.top - bounds.top,
+          right: rect.right - bounds.left, bottom: rect.bottom - bounds.top,
+        });
+      }
       for (const [key, center] of Object.entries(centers)) {
         placeBodyLabel(labels[key], center, width, height, occupied);
       }
-      const bounds = overlay.getBoundingClientRect();
-      for (const [key, tip] of axes) {
+      for (const [key, tip] of ticks) {
         const label = labels[key];
+        label.style.opacity = gridInk.opacity;
+        if (comparing || !grid.visible) {
+          label.hidden = true;
+          continue;
+        }
         placeLabel(label, tip);
         if (label.hidden) continue;
         const rect = label.getBoundingClientRect();
@@ -343,7 +466,12 @@
         label.hidden = occupied.some((other) => overlaps(box, other));
         if (!label.hidden) occupied.push(box);
       }
-      drawVectors(centers, width, height, occupied);
+      if (comparing || earthPreset) {
+        ink.clearRect(0, 0, width, height);
+        onVelocityScale(null);
+      } else {
+        drawVectors(centers, width, height, occupied);
+      }
       onApparentSizes(apparentSizes);
     }
 
@@ -355,7 +483,7 @@
     for (const [key, body] of Object.entries(bodies)) {
       const material = key === "sun"
         ? new THREE.MeshBasicMaterial({ color: 0xffb460 })
-        : new THREE.MeshStandardMaterial({ color: body.color, ...PLANET_SURFACES[key] });
+        : new THREE.MeshStandardMaterial({ color: body.color, roughness: key === "earth" ? 0.82 : 1 });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 40), material);
       const [ra, dec] = body.pole.map((angle) => angle * RADIANS);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), toWorld({
@@ -370,13 +498,21 @@
       scene.add(mesh);
       labels[key].addEventListener("click", () => onSelect(key));
 
+      const comparison = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color: material.color }));
+      comparison.scale.setScalar(body.radiusKm / physics.AU_KM);
+      comparison.quaternion.copy(mesh.quaternion);
+      comparisonMeshes[key] = comparison;
+      comparisonScene.add(comparison);
+
       const source = window.gpsSolarTextures?.[key];
       if (source) {
         textures.load(source, (texture) => {
           texture.colorSpace = THREE.SRGBColorSpace;
-          material.map = texture;
-          material.color.set(0xffffff);
-          material.needsUpdate = true;
+          for (const surface of [material, comparison.material]) {
+            surface.map = texture;
+            surface.color.set(0xffffff);
+            surface.needsUpdate = true;
+          }
           draw();
         }, undefined, () => textureUnavailable(key));
       } else {
@@ -388,8 +524,70 @@
       }));
       path.name = `orbit-${key}`;
       path.visible = false;
+      path.userData.opacity = 0.38;
       paths[key] = path;
       scene.add(path);
+
+      const color = new THREE.Color(body.color);
+      const colors = [];
+      for (let i = 0; i < physics.TRAIL_POINTS; i += 1) {
+        colors.push(color.r, color.g, color.b, (i / (physics.TRAIL_POINTS - 1)) ** 1.4);
+      }
+      const trailGeometry = new THREE.BufferGeometry()
+        .setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(physics.TRAIL_POINTS * 3), 3))
+        .setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+      const trail = new THREE.Line(trailGeometry, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, depthWrite: false,
+      }));
+      trail.frustumCulled = false;
+      trail.visible = false;
+      trails[key] = trail;
+      scene.add(trail);
+    }
+
+    const solarRadius = comparisonMeshes.sun.scale.x;
+    let rightEdge = -solarRadius;
+    for (const mesh of Object.values(comparisonMeshes)) {
+      mesh.position.x = rightEdge + mesh.scale.x;
+      rightEdge += 2 * mesh.scale.x + solarRadius * 0.44;
+    }
+    rightEdge -= solarRadius * 0.44;
+    const comparisonCenter = (rightEdge - solarRadius) / 2;
+    const comparisonHalfWidth = (rightEdge + solarRadius) / 2;
+
+    function frameComparison() {
+      const halfHeight = 1.23 * Math.max(solarRadius, comparisonHalfWidth / camera.aspect);
+      comparisonCamera.top = halfHeight;
+      comparisonCamera.bottom = -halfHeight;
+      comparisonCamera.right = halfHeight * camera.aspect;
+      comparisonCamera.left = -comparisonCamera.right;
+      comparisonCamera.position.set(comparisonCenter, 0, 0.1);
+      comparisonCamera.updateProjectionMatrix();
+    }
+
+    function setComparison(enabled) {
+      if (comparing === enabled) return;
+      comparing = enabled;
+      if (enabled) {
+        stopApproach();
+        frameComparison();
+      }
+      controls.enabled = !comparing && !earthPreset && trackedBody !== null;
+      onComparison(enabled);
+      draw();
+    }
+
+    function updateTrails(samples) {
+      for (const [key, trail] of Object.entries(trails)) {
+        trail.visible = key !== frameReference && samples.length > 1;
+        if (!trail.visible) continue;
+        const vertices = trail.geometry.getAttribute("position");
+        samples.forEach((sample, i) => {
+          const { x, y, z } = sample[key];
+          vertices.setXYZ(i, x, z, -y);
+        });
+        vertices.needsUpdate = true;
+      }
     }
 
     function setCurvature(visible) {
@@ -424,7 +622,7 @@
         uniforms: {
           sourceOffsets: { value: keys.map(() => new THREE.Vector3()) },
           gmPerAu: { value: keys.map((key) => physics.GM_KM3_S2[key] / physics.AU_KM) },
-          radiiAu: { value: keys.map((key) => bodies[key].equatorialKm / physics.AU_KM) },
+          radiiAu: { value: keys.map((key) => bodies[key].radiusKm / physics.AU_KM) },
           logLimits: { value: new THREE.Vector2(Math.log(300), Math.log(200_000)) },
           farColor: { value: new THREE.Color("#3f8caa") },
           middleColor: { value: new THREE.Color("#9a78d2") },
@@ -432,12 +630,16 @@
           fillOpacity: { value: 0.28 },
         },
         vertexShader: `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
           varying vec3 offsetAu;
           void main() {
             offsetAu = mat3(modelMatrix) * position;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <logdepthbuf_vertex>
           }`,
         fragmentShader: `
+          #include <logdepthbuf_pars_fragment>
           varying vec3 offsetAu;
           uniform vec3 sourceOffsets[3];
           uniform float gmPerAu[3], radiiAu[3];
@@ -459,13 +661,14 @@
             float line = 1.0 - smoothstep(0.0, clamp(fwidth(bands), 0.025, 0.2), abs(fract(bands + 0.5) - 0.5));
             float opacity = (fillOpacity + 0.43 * line) * (1.0 - smoothstep(1.86, 2.2, length(offsetAu)));
             if (!exterior) discard;
+            #include <logdepthbuf_fragment>
             gl_FragColor = vec4(color, opacity);
             #include <colorspace_fragment>
           }`,
       });
       const surface = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), material);
       surface.name = "newtonian-potential";
-      surface.rotation.x = -Math.PI / 2;
+      surface.rotation.x = physics.OBLIQUITY_J2000 - Math.PI / 2;
       surface.visible = false;
       scene.add(surface);
       return surface;
@@ -474,7 +677,10 @@
     function updateGravitySurface() {
       const sun = meshes.sun.position;
       gravity.position.copy(sun);
-      if (trackedBody) gravity.position.y = meshes[trackedBody].position.y;
+      if (trackedBody) {
+        const height = meshes[trackedBody].position.clone().sub(sun).dot(eclipticNormal);
+        gravity.position.addScaledVector(eclipticNormal, height);
+      }
       const offsets = gravity.material.uniforms.sourceOffsets.value;
       for (const [i, mesh] of Object.values(meshes).entries()) offsets[i].copy(mesh.position).sub(gravity.position);
       gravity.material.uniforms.fillOpacity.value = trackedBody ? 0.12 : 0.28;
@@ -484,7 +690,9 @@
       const { clientWidth: width, clientHeight: height } = stage;
       if (!width || !height) return;
       camera.aspect = width / height;
+      updateFieldOfView();
       camera.updateProjectionMatrix();
+      frameComparison();
       renderer.setSize(width, height, false);
       const ratio = renderer.getPixelRatio();
       overlay.width = Math.round(width * ratio);
@@ -494,6 +702,11 @@
     }
 
     function updateCamera() {
+      if (earthPreset) {
+        camera.lookAt(controls.target);
+        draw();
+        return;
+      }
       if (!controls.update()) draw();
     }
 
@@ -527,7 +740,6 @@
       const movement = limitMovement(delta);
       camera.position.add(movement);
       controls.target.add(movement);
-      updateCamera();
       return movement.length();
     }
 
@@ -549,6 +761,7 @@
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
       const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
       moveFree(right.multiplyScalar(-x * scale).addScaledVector(up, y * scale));
+      updateCamera();
     }
 
     function keepFreeCameraOutside() {
@@ -564,13 +777,23 @@
       }
     }
 
-    function zoom(logStep) {
+    function zoom(logStep, point) {
+      if (comparing) return;
+      stopApproach();
       const factor = Math.exp(Math.max(-0.75, Math.min(0.75, logStep)));
+      if (earthPreset) {
+        const radius = meshes.earth.scale.x;
+        earthAltitude = Math.max(radius * MIN_CLEARANCE_RADII, Math.min(controls.maxDistance - radius, earthAltitude * factor));
+        frameEarthPreset();
+        updateCamera();
+        return;
+      }
       if (!trackedBody) {
         const step = freeMotionScale() * (1 - factor);
-        const forward = controls.target.clone().sub(camera.position).normalize();
+        const forward = point ? castAt(point.x, point.y).direction.clone() : camera.getWorldDirection(new THREE.Vector3());
         const moved = moveFree(forward.multiplyScalar(step));
         freeReference = Math.max(1e-9, Math.min(14, freeReference - Math.sign(step) * moved));
+        updateCamera();
         return;
       }
       const offset = camera.position.clone().sub(controls.target);
@@ -587,6 +810,9 @@
     }
 
     function center(key) {
+      earthPreset = false;
+      camera.up.set(0, 1, 0);
+      updateFieldOfView();
       trackedBody = key;
       controls.enabled = key !== null;
       for (const id of Object.keys(meshes)) labels[id].setAttribute("aria-pressed", String(id === key));
@@ -594,14 +820,86 @@
       onTarget(key);
     }
 
+    function updateFieldOfView() {
+      const vertical = 2 * Math.atan(Math.tan(57.5 * RADIANS) / camera.aspect) / RADIANS;
+      const next = earthPreset ? Math.max(78, vertical) : OVERVIEW_FOV;
+      if (camera.fov === next) return;
+      camera.fov = next;
+      camera.updateProjectionMatrix();
+    }
+
+    function frameEarthPreset() {
+      const earth = meshes.earth;
+      const sunward = meshes.sun.position.clone().sub(earth.position).normalize();
+      const sidelong = new THREE.Vector3().crossVectors(eclipticNormal, sunward).normalize();
+      // The Sun and a sunlit crescent fit together when we look from the night side at an angle.
+      const angle = 64 * RADIANS;
+      const distance = earth.scale.x + earthAltitude;
+      camera.position.copy(earth.position)
+        .addScaledVector(sunward, -distance * Math.cos(angle))
+        .addScaledVector(sidelong, distance * Math.sin(angle));
+      const towardsEarth = earth.position.clone().sub(camera.position).normalize();
+      const towardsSun = meshes.sun.position.clone().sub(camera.position).normalize();
+      controls.target.copy(camera.position).addScaledVector(towardsEarth.lerp(towardsSun, 0.27).normalize(), distance);
+    }
+
+    function outsideEarth() {
+      if (!meshes.earth.visible) return;
+      stopApproach();
+      setComparison(false);
+      center("earth");
+      earthPreset = true;
+      earthAltitude = EARTH_ALTITUDE_AU;
+      controls.enabled = false;
+      camera.up.copy(eclipticNormal);
+      updateFieldOfView();
+      frameEarthPreset();
+      onTarget("earth", false, true);
+      updateCamera();
+    }
+
+    function stopApproach() {
+      if (approachFrame === null) return;
+      cancelAnimationFrame(approachFrame);
+      approachFrame = null;
+      onTarget(trackedBody);
+    }
+
     function focus(key) {
+      stopApproach();
+      setComparison(false);
       center(key);
       if (!meshes[key].visible) return;
-      const distance = targetRadius() * 5 * Math.max(1, 1 / camera.aspect);
-      const offset = camera.position.clone().sub(controls.target).setLength(distance);
-      controls.target.copy(meshes[key].position);
+      const target = meshes[key].position;
+      const offset = camera.position.clone().sub(target);
+      const startDistance = offset.length();
+      const endDistance = targetRadius() * 5 * Math.max(1, 1 / camera.aspect);
+      const ratio = endDistance / startDistance;
+      controls.target.copy(target);
       setMinimumDistance();
-      changeOffset(offset);
+      if (reducedMotion.matches || !Number.isFinite(ratio) || Math.abs(Math.log(ratio)) < 0.02) {
+        changeOffset(offset.setLength(endDistance));
+        return;
+      }
+
+      const duration = Math.min(1300, 440 + 68 * Math.abs(Math.log(ratio)));
+      const startTime = performance.now();
+      function approach(now) {
+        const progress = Math.min(1, (now - startTime) / duration);
+        const ease = progress ** 2 * (3 - 2 * progress);
+        const desired = offset.clone().multiplyScalar(ratio ** ease);
+        const current = camera.position.clone().sub(controls.target);
+        changeOffset(current.add(limitMovement(desired.sub(current))));
+        if (progress < 1) {
+          approachFrame = requestAnimationFrame(approach);
+        } else {
+          approachFrame = null;
+          onTarget(key);
+        }
+      }
+      onTarget(key, true);
+      updateCamera();
+      approachFrame = requestAnimationFrame(approach);
     }
 
     function setScale(mode) {
@@ -609,11 +907,20 @@
       const offset = camera.position.clone().sub(controls.target);
       const distance = offset.length();
       for (const [key, mesh] of Object.entries(meshes)) {
-        const { equatorialKm, polarKm, visualRadius } = bodies[key];
-        const radius = mode === "real" ? equatorialKm / physics.AU_KM : visualRadius;
-        mesh.scale.set(radius, radius * polarKm / equatorialKm, radius);
+        const { radiusKm, visualRadius } = bodies[key];
+        mesh.scale.setScalar(mode === "real" ? radiusKm / physics.AU_KM : visualRadius);
       }
       setMinimumDistance();
+      halo.scale.setScalar(meshes.sun.scale.x * 2.75);
+      if (earthPreset) {
+        frameEarthPreset();
+        updateCamera();
+        return;
+      }
+      if (approachFrame !== null) {
+        focus(trackedBody);
+        return;
+      }
       // Preserve the close-up framing and angle across scale changes.
       if (trackedBody && meshes[trackedBody].visible && distance <= previousRadius * 20) {
         offset.setLength(distance * targetRadius() / previousRadius);
@@ -624,11 +931,16 @@
 
     const raycaster = new THREE.Raycaster();
     const cursor = new THREE.Vector2();
-    function pickBody(x, y) {
+    function castAt(x, y) {
       const rect = canvas.getBoundingClientRect();
       cursor.set(2 * (x - rect.left) / rect.width - 1, 1 - 2 * (y - rect.top) / rect.height);
-      raycaster.setFromCamera(cursor, camera);
-      const visible = Object.values(meshes).filter((mesh) => mesh.visible);
+      raycaster.setFromCamera(cursor, comparing ? comparisonCamera : camera);
+      return raycaster.ray;
+    }
+
+    function pickBody(x, y) {
+      castAt(x, y);
+      const visible = Object.values(comparing ? comparisonMeshes : meshes).filter((mesh) => mesh.visible);
       const [hit] = raycaster.intersectObjects(visible, false);
       if (hit) onSelect(hit.object.userData.body);
     }
@@ -652,7 +964,7 @@
       pinchFrame = null;
       const pair = touchPair();
       if (lastPair?.span && pair?.span) {
-        if (lastPair.span !== pair.span) zoom(Math.log(lastPair.span / pair.span));
+        if (lastPair.span !== pair.span) zoom(Math.log(lastPair.span / pair.span), pair);
         if (!trackedBody && (lastPair.x !== pair.x || lastPair.y !== pair.y)) {
           panFree(pair.x - lastPair.x, pair.y - lastPair.y);
         }
@@ -661,6 +973,7 @@
     }
 
     canvas.addEventListener("pointerdown", (event) => {
+      stopApproach();
       const { pointerId: id, clientX: x, clientY: y } = event;
       if (event.pointerType === "touch") {
         touches.set(id, { x, y });
@@ -674,7 +987,7 @@
         return;
       }
       if (event.button === 0) clickStart = { id, x, y };
-      if (!trackedBody && (event.button === 0 || event.button === 2)) {
+      if ((!trackedBody || earthPreset) && !comparing && (event.button === 0 || event.button === 2)) {
         freeDrag = { id, x, y, pan: event.shiftKey || event.button === 2 };
         canvas.setPointerCapture(id);
       }
@@ -689,12 +1002,13 @@
           return;
         }
       }
-      if (!trackedBody && freeDrag?.id === id) {
+      if (freeDrag?.id === id && !comparing) {
         const dx = x - freeDrag.x;
         const dy = y - freeDrag.y;
         freeDrag.x = x;
         freeDrag.y = y;
         if (clickStart) return;
+        if (earthPreset) leaveFocus();
         if (freeDrag.pan) panFree(dx, dy);
         else turnFree(dx * 0.005, dy * 0.005);
       }
@@ -722,7 +1036,7 @@
     stage.addEventListener("wheel", (event) => {
       event.preventDefault();
       const unitSize = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1;
-      zoom(event.deltaY * unitSize * WHEEL_SENSITIVITY);
+      zoom(event.deltaY * unitSize * WHEEL_SENSITIVITY, { x: event.clientX, y: event.clientY });
     }, { passive: false });
 
     controls.addEventListener("change", draw);
@@ -739,6 +1053,7 @@
       resize();
     });
     canvas.addEventListener("keydown", (event) => {
+      if (comparing) return;
       if (event.key === "+" || event.key === "=" || event.key === "-") {
         event.preventDefault();
         zoom(event.key === "-" ? 0.22 : -0.22);
@@ -762,6 +1077,8 @@
       const turn = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
       if (!turn) return;
       event.preventDefault();
+      stopApproach();
+      if (earthPreset) leaveFocus();
       if (!trackedBody) {
         turnFree(0.13 * turn[0], 0.13 * turn[1]);
         return;
@@ -772,13 +1089,30 @@
       angle.phi += 0.13 * turn[1];
       changeOffset(offset.setFromSpherical(angle.makeSafe()));
     });
-    setScale("visual");
+    setScale("real");
     resize();
+
+    function leaveFocus() {
+      if (!trackedBody) return;
+      stopApproach();
+      freeReference = Math.max(1e-9, camera.position.distanceTo(meshes[trackedBody].position) - targetRadius());
+      center(null);
+      setMinimumDistance();
+      updateCamera();
+    }
 
     return {
       resize,
       zoom,
       setScale,
+      setComparison,
+      outsideEarth,
+      stopApproach,
+      setMeasuredPair(pair) {
+        measuredPair = pair;
+        updateBaseline();
+        draw();
+      },
       setCurvature,
       setGravityVisibility(visible) {
         if (visible && !gravity) gravity = createGravitySurface();
@@ -808,22 +1142,29 @@
           path.geometry = new THREE.BufferGeometry().setFromPoints(points);
         }
       },
-      showPositions(positions, frameVelocities, frameAccelerations) {
+      showPositions(positions, frameVelocities, frameAccelerations, reference, trailSamples) {
         const pendingFocus = trackedBody && !meshes[trackedBody].visible;
         for (const [key, mesh] of Object.entries(meshes)) {
           mesh.position.copy(toWorld(positions[key]));
           mesh.visible = true;
         }
+        frameReference = reference;
+        updateBaseline();
+        updateTrails(trailSamples);
         velocities = frameVelocities;
         accelerations = frameAccelerations;
         if (gravity?.visible) updateGravitySurface();
         sunlight.position.copy(meshes.sun.position);
+        halo.position.copy(meshes.sun.position);
+        halo.visible = true;
         if (curvature) curvature.position.copy(meshes.sun.position);
         if (pendingFocus) {
           focus(trackedBody);
           return;
         }
-        if (trackedBody) {
+        if (earthPreset) {
+          frameEarthPreset();
+        } else if (trackedBody) {
           const target = meshes[trackedBody].position;
           camera.position.sub(controls.target).add(target);
           controls.target.copy(target);
@@ -834,18 +1175,17 @@
       },
       select(key) {
         for (const id of Object.keys(meshes)) labels[id].classList.toggle("selected", id === key);
-        for (const [id, path] of Object.entries(paths)) path.material.opacity = id === key ? 0.62 : 0.38;
+        for (const [id, path] of Object.entries(paths)) path.userData.opacity = id === key ? 0.62 : 0.38;
         draw();
       },
       focus,
       free() {
-        if (!trackedBody) return;
-        freeReference = Math.max(1e-9, camera.position.distanceTo(controls.target) - targetRadius());
-        center(null);
-        setMinimumDistance();
-        updateCamera();
+        setComparison(false);
+        leaveFocus();
       },
       reset() {
+        stopApproach();
+        setComparison(false);
         center(null);
         freeReference = overview.length();
         controls.target.set(0, 0, 0);

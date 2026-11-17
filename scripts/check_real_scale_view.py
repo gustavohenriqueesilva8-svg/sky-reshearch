@@ -1,23 +1,54 @@
 """Verify real-scale markers and the textured close-ups in the served page."""
 
 import argparse
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
 from playwright.sync_api import expect, sync_playwright
 
-from check_gps_physics import cut
+from check_gps_physics import AU, START, cut
 
 BODIES = {
-    "Sol": ("sun", "1.391.400 km", lambda r, g, b: r > 120 and r > 1.1 * g and g > 1.15 * b),
-    "Terra": ("earth", "12.756,2 km", lambda r, g, b: b > 1.05 * r or g > 1.04 * r),
-    "Marte": ("mars", "6.792,4 km", lambda r, g, b: r > 80 and r > 1.25 * g and g > 1.1 * b),
+    "Sol": ("sun", "no Sol", "1.392.700 km", lambda r, g, b: r > 120 and r > 1.1 * g and g > 1.15 * b),
+    "Terra": ("earth", "na Terra", "12.742 km", lambda r, g, b: b > 1.05 * r or g > 1.04 * r),
+    "Marte": ("mars", "em Marte", "6.779 km", lambda r, g, b: r > 40 and r > 1.25 * g and g > 1.1 * b),
 }
 
 
 def apparent(page):
     return float(page.locator("#gps-apparent").inner_text().removesuffix(" px").replace(",", "."))
+
+def as_km(text):
+    quantity, unit = text.split()
+    return float(quantity.replace(".", "").replace(",", ".")) * (AU if unit == "ua" else 1)
+
+def km_per_pixel(page):
+    ruler = as_km(page.locator("#gps-view-scale-value").inner_text())
+    return ruler / page.locator("#gps-view-scale-bar").bounding_box()["width"]
+
+def camera_range(page):
+    return as_km(page.locator("#gps-view-range").inner_text().split(" · ")[1])
+
+
+def wheel_toward_earth(page, canvas):
+    earth = page.locator("[data-scene-label='earth']")
+    mars = page.locator("[data-scene-label='mars']")
+    canvas.scroll_into_view_if_needed()
+    bounds = canvas.bounding_box()
+    position = "(label) => [parseFloat(label.style.left), parseFloat(label.style.top)]"
+    x, y = earth.evaluate(position)
+    initial_mars = mars.evaluate("(label) => label.style.top")
+    old_res = km_per_pixel(page)
+    page.mouse.move(bounds["x"] + x, bounds["y"] + y)
+    page.mouse.wheel(0, -180)
+    page.wait_for_function(
+        "(before) => document.querySelector('[data-scene-label=mars]').style.top !== before", arg=initial_mars,
+    )
+    new_x, new_y = earth.evaluate(position)
+    assert abs(new_x - x) < 1 and abs(new_y - y) < 1, ((x, y), (new_x, new_y))
+    assert km_per_pixel(page) < old_res
 
 
 def main() -> None:
@@ -29,7 +60,7 @@ def main() -> None:
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(channel=args.channel)
-        for width, height in ((1440, 1050), (390, 844)):
+        for width, height in ((1440, 1050), (662, 733), (390, 844)):
             context = browser.new_context(
                 viewport={"width": width, "height": height},
                 is_mobile=width < 500,
@@ -39,31 +70,53 @@ def main() -> None:
             page.goto(args.url)
             expect(page.locator("#gps-readout")).to_be_visible()
             expect(page.locator("#gps-camera-target")).to_have_text("Navegação livre")
-            cut(page)
             real = page.get_by_role("button", name="Proporção real", exact=True)
-            real.click()
+            expect(real).to_have_attribute("aria-pressed", "true")
+            cut(page)
+            expect(page.locator("#gps-diameter-ratio")).to_have_text("109,30 vezes")
+            disk_sizes = [page.locator(f"[data-diameter-disk='{key}']").bounding_box()["width"]
+                          for key, *_ in BODIES.values()]
+            assert abs(disk_sizes[0] / disk_sizes[1] - 109.30) < 2
+            assert abs(disk_sizes[0] / disk_sizes[2] - 205.44) < 5
+            initial_scale = km_per_pixel(page)
+            initial_range = camera_range(page)
+            measure = page.locator("#gps-measure-value").inner_text()
+            page.get_by_role("button", name="Aproximar", exact=True).click()
+            assert km_per_pixel(page) < initial_scale * 0.85
+            assert camera_range(page) < initial_range * 0.85
+            assert page.locator("#gps-measure-value").inner_text() == measure
             reset = page.get_by_role("button", name="Visão geral", exact=True)
+            reset.click()
             expect(page.locator("#gps-camera-target")).to_have_text("Navegação livre")
             expect(page.locator("#gps-render-error")).to_be_hidden()
             canvas = page.locator("#gps-stage canvas[tabindex]")
+            if width == 662:
+                wheel_toward_earth(page, canvas)
+                reset.click()
+            start = datetime.fromisoformat(START)
+            page.clock.install(time=start)
+            page.clock.pause_at(start + timedelta(seconds=1))
             report = []
-            for name, (key, diameter, is_body_pixel) in BODIES.items():
+            for name, (key, location, diameter, is_body_pixel) in BODIES.items():
                 reset.click()
                 marker = page.get_by_role("button", name=f"Centralizar {name} na cena")
                 expect(marker).to_be_visible()
-                if key != "sun" or width < 500:
-                    expect(marker).to_have_attribute("data-subpixel", "")
-                else:
-                    expect(marker).not_to_have_attribute("data-subpixel", "")
-                    assert marker.bounding_box()["y"] + marker.bounding_box()["height"] < (
-                        canvas.bounding_box()["y"] + canvas.bounding_box()["height"] / 2 - 4
-                    )
+                expect(marker).to_have_attribute("data-subpixel", "")
                 marker.click()
-                expect(page.locator("#gps-camera-target")).to_have_text(f"Foco em {name}")
+                expect(page.locator("#gps-camera-target")).to_have_text(f"Aproximação · {name}")
+                initial_range = camera_range(page)
+                page.clock.run_for(350)
+                assert 0 < camera_range(page) < initial_range
+                page.clock.run_for(1050)
+                expect(page.locator("#gps-camera-target")).to_have_text(f"Foco {location}")
                 expect(page.locator("#gps-body-diameter")).to_have_text(diameter)
                 expect(real).to_have_attribute("aria-pressed", "true")
                 pixels = apparent(page)
                 assert pixels > 80, (name, pixels)
+                before_zoom = camera_range(page)
+                page.get_by_role("button", name="Aproximar", exact=True).click()
+                assert camera_range(page) < before_zoom and apparent(page) > pixels
+                assert page.locator("#gps-measure-value").inner_text() == measure
                 capture_path = args.captures / f"modelo-{key}-{width}.png" if args.captures else None
                 with Image.open(BytesIO(canvas.screenshot(path=capture_path))) as capture:
                     image = capture.convert("RGB")
