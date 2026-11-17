@@ -179,7 +179,7 @@
       changeOffset(offset);
     }
 
-    function setScale(mode) {
+    function setScale(mode, selectedBody) {
       const previousRadius = targetRadius();
       const offset = camera.position.clone().sub(controls.target);
       const distance = offset.length();
@@ -192,6 +192,10 @@
       // Preserve the close-up framing and angle across scale changes.
       if (trackedBody && meshes[trackedBody].visible && distance <= previousRadius * 20) {
         offset.setLength(distance * targetRadius() / previousRadius);
+      } else if (mode === "real") {
+        // At system scale the real planets are smaller than a screen pixel.
+        focus(trackedBody ?? selectedBody);
+        return;
       }
       changeOffset(offset);
     }

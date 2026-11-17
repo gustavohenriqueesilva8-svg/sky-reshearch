@@ -259,9 +259,9 @@
         const scale = button.dataset.gpsScale;
         for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option === button));
         find("#gps-scale-note").textContent = scale === "real"
-          ? "Diâmetros na mesma escala das distâncias. Selecione um astro para vê-lo de perto."
+          ? "Diâmetros na mesma escala das distâncias. O modo aproxima a câmera do astro ao abrir."
           : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
-        scene?.setScale(scale);
+        scene?.setScale(scale, selected);
       });
     }
     focus.addEventListener("click", () => {
