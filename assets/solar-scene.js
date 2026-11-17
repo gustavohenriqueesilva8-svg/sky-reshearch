@@ -5,17 +5,21 @@
   const RADIANS = Math.PI / 180;
   const WHEEL_SENSITIVITY = 0.0025;
   const MIN_CLEARANCE_RADII = 0.06;
+  const GRAVITY_INK = "#e1ceff";
+  const GRAVITY_ARROW_OFFSETS = { sun: -10, earth: 0, mars: 10 };
   const PLANET_SURFACES = {
     earth: { roughness: 0.78, emissive: 0x193766, emissiveIntensity: 0.12 },
     mars: { roughness: 1, emissive: 0x6a2715, emissiveIntensity: 0.1 },
   };
 
-  window.createSolarScene = (stage, bodies, { onSelect, onTarget, onMissingTextures, onApparentSizes }) => {
+  window.createSolarScene = (stage, bodies, { onSelect, onTarget, onMissingTextures, onApparentSizes, onVelocityScale }) => {
     const THREE = window.SkyThree;
     const canvas = stage.querySelector("canvas");
     const renderError = stage.querySelector("#gps-render-error");
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const overlay = stage.querySelector(".gps-vector-overlay");
+    const ink = overlay.getContext("2d");
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 30);
     const overview = new THREE.Vector3(2.65, 2.65, 4.7);
@@ -54,7 +58,6 @@
       (element) => [element.dataset.sceneLabel, element]));
     const meshes = {};
     const paths = {};
-    const arrows = {};
     const textures = new THREE.TextureLoader();
     const missingTextures = new Set();
     let trackedBody = null;
@@ -63,8 +66,10 @@
     let velocities = null;
     let showVelocityArrows = true;
     let curvature = null;
+    let gravity = null;
+    let accelerations = null;
+    let gravitySource = "total";
 
-    const cameraUp = new THREE.Vector3();
     function placeLabel(label, vector) {
       const point = vector.clone().project(camera);
       label.hidden = point.z < -1 || point.z > 1 || Math.abs(point.x) > 1 || Math.abs(point.y) > 1;
@@ -72,6 +77,204 @@
         label.style.left = `${(point.x + 1) * 50}%`;
         label.style.top = `${(1 - point.y) * 50}%`;
       }
+    }
+
+    function screenPoint(view, width, height) {
+      const point = view.clone().applyMatrix4(camera.projectionMatrix);
+      return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 };
+    }
+
+    function overlaps(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    function placeBodyLabel(label, center, width, height, occupied) {
+      const { x, y, diameterPx, silhouette } = center;
+      const subpixel = diameterPx < 1;
+      label.toggleAttribute("data-subpixel", subpixel);
+      label.removeAttribute("data-marker-only");
+      if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a um pixel.");
+      else label.removeAttribute("aria-description");
+      label.hidden = x < 0 || x > width || y < 0 || y > height;
+      if (label.hidden) return;
+      const fits = (box) => box.left >= 0 && box.right <= width && box.top >= 0 && box.bottom <= height &&
+        !occupied.some((other) => overlaps(box, other));
+      if (subpixel) {
+        const { offsetWidth: w, offsetHeight: h } = label.firstElementChild;
+        label.style.left = `${x}px`;
+        label.style.top = `${y}px`;
+        for (const onLeft of [false, true]) {
+          const left = onLeft ? x - 10 - w : x + 10;
+          const box = { left, top: y - h / 2, right: left + w, bottom: y + h / 2 };
+          if (!fits(box)) continue;
+          label.toggleAttribute("data-left", onLeft);
+          occupied.push(box);
+          return;
+        }
+        label.setAttribute("data-marker-only", "");
+        return;
+      }
+
+      const halfWidth = label.offsetWidth / 2;
+      const h = label.offsetHeight;
+      const centeredX = Math.max(halfWidth, Math.min(x, width - halfWidth));
+      const candidates = [
+        [centeredX, silhouette.top - 6],
+        [silhouette.right + 6 + halfWidth, y + h / 2],
+        [silhouette.left - 6 - halfWidth, y + h / 2],
+        [centeredX, silhouette.bottom + 6 + h],
+      ];
+      for (const [anchorX, anchorY] of candidates) {
+        const box = { left: anchorX - halfWidth, top: anchorY - h, right: anchorX + halfWidth, bottom: anchorY };
+        if (!fits(box)) continue;
+        label.style.left = `${anchorX}px`;
+        label.style.top = `${anchorY}px`;
+        occupied.push(box);
+        return;
+      }
+      label.hidden = true;
+    }
+
+    function paintVector(vector, center, width, height, annotations) {
+      const { x, y, diameterPx, view } = center;
+      if (x < 0 || x > width || y < 0 || y > height) return;
+      const tipView = view.clone().add(vector.delta.clone().applyMatrix3(viewRotation));
+      // A projected line remains straight. Clip at the near plane before projecting.
+      if (tipView.z > -camera.near) {
+        tipView.lerp(view, (-camera.near - tipView.z) / (view.z - tipView.z));
+      }
+      const tip = screenPoint(tipView, width, height);
+      const dx = tip.x - x;
+      const dy = tip.y - y;
+      const length = Math.hypot(dx, dy);
+      const gap = Math.max(9, diameterPx / 2 + 4);
+      if (length - gap < 9) return;
+      const ux = dx / length;
+      const uy = dy / length;
+      // Separate parallel gravity arrows in projection while preserving their bearing.
+      const offset = vector.offset ?? 0;
+      const ox = Math.abs(uy) * offset;
+      const oy = -ux * (Math.sign(uy) || 1) * offset;
+      tip.x += ox;
+      tip.y += oy;
+      const head = Math.min(12, (length - gap) * 0.64);
+      const arrowBase = { x: tip.x - ux * head, y: tip.y - uy * head };
+      const dash = vector.gravity ? [5, 4] : [];
+
+      ink.lineCap = "round";
+      ink.lineJoin = "round";
+      ink.beginPath();
+      ink.moveTo(x + ox + ux * gap, y + oy + uy * gap);
+      ink.lineTo(arrowBase.x, arrowBase.y);
+      ink.setLineDash(dash);
+      ink.strokeStyle = "#070e1a";
+      ink.lineWidth = 6;
+      ink.stroke();
+      ink.strokeStyle = vector.color;
+      ink.lineWidth = vector.gravity ? 2 : 3.25;
+      ink.stroke();
+      ink.setLineDash([]);
+      ink.beginPath();
+      ink.moveTo(tip.x, tip.y);
+      ink.lineTo(arrowBase.x - uy * head * 0.45, arrowBase.y + ux * head * 0.45);
+      ink.lineTo(arrowBase.x + uy * head * 0.45, arrowBase.y - ux * head * 0.45);
+      ink.closePath();
+      ink.strokeStyle = "#070e1a";
+      ink.lineWidth = 4;
+      ink.stroke();
+      ink.fillStyle = vector.gravity ? "#0b1525" : vector.color;
+      ink.fill();
+      if (vector.gravity) {
+        ink.strokeStyle = vector.color;
+        ink.lineWidth = 1.5;
+        ink.stroke();
+      }
+      if (tip.x >= 0 && tip.x <= width && tip.y >= 0 && tip.y <= height) {
+        const headBounds = {
+          left: Math.min(tip.x, arrowBase.x) - 6, right: Math.max(tip.x, arrowBase.x) + 6,
+          top: Math.min(tip.y, arrowBase.y) - 6, bottom: Math.max(tip.y, arrowBase.y) + 6,
+        };
+        annotations.push({ ...vector, tip, ux, uy, headBounds });
+      }
+    }
+
+    function paintVectorLabels(annotations, occupied, width, height) {
+      ink.font = "600 11px system-ui, sans-serif";
+      ink.textBaseline = "middle";
+      for (const { tip, ux, uy, name, color } of annotations) {
+        const w = ink.measureText(name).width + 12;
+        const h = 19;
+        // Try beyond the tip, then to either side of the arrow.
+        const offsets = [[ux, uy], [-uy, ux], [uy, -ux], [1, 0], [-1, 0], [0, -1], [0, 1],
+          [1, 1], [-1, 1], [1, -1], [-1, -1]];
+        for (const [dx, dy] of offsets) {
+          const x = Math.max(2, Math.min(width - w - 2, tip.x + dx * (w / 2 + 7) - w / 2));
+          const y = Math.max(2, Math.min(height - h - 2, tip.y + dy * (h / 2 + 8) - h / 2));
+          const box = { left: x, top: y, right: x + w, bottom: y + h };
+          if (occupied.some((other) => overlaps(box, other))) continue;
+          ink.fillStyle = "#0a1322";
+          ink.beginPath();
+          ink.roundRect(x, y, w, h, 4);
+          ink.fill();
+          ink.fillStyle = color;
+          ink.fillText(name, x + 6, y + h / 2);
+          occupied.push(box);
+          break;
+        }
+      }
+    }
+
+    const viewRotation = new THREE.Matrix3();
+    function fitFocusVector(delta, depth, width, height) {
+      // Keep the focused arrowhead on screen by limiting its 3D length at the frustum.
+      const tipOffset = delta.clone().applyMatrix3(viewRotation);
+      const pixelsPerSlope = height * camera.projectionMatrix.elements[5] / 2;
+      const horizontal = (width / 2 - 18) / pixelsPerSlope;
+      const vertical = (height / 2 - 18) / pixelsPerSlope;
+      if (horizontal <= 0 || vertical <= 0) return 1;
+      return depth / Math.max(depth,
+        tipOffset.z + Math.abs(tipOffset.x) / horizontal,
+        tipOffset.z + Math.abs(tipOffset.y) / vertical);
+    }
+
+    function drawVectors(centers, width, height, occupied) {
+      ink.clearRect(0, 0, width, height);
+      viewRotation.setFromMatrix4(camera.matrixWorldInverse);
+      const frameDistance = trackedBody ? camera.position.distanceTo(controls.target) : freeReference;
+      const focusFactor = Math.min(1, camera.aspect);
+      const speed = (key) => toWorld(velocities[key]).length();
+      const referenceSpeed = velocities && (
+        (trackedBody && speed(trackedBody)) || Math.max(...Object.keys(velocities).map(speed))
+      );
+      let velocityScale = referenceSpeed && frameDistance * (trackedBody ? 0.43 * focusFactor : 0.15) / referenceSpeed;
+      if (trackedBody && velocityScale) {
+        const focusedDelta = toWorld(velocities[trackedBody]).multiplyScalar(velocityScale);
+        velocityScale *= fitFocusVector(focusedDelta, frameDistance, width, height);
+      }
+      onVelocityScale(showVelocityArrows && velocityScale ? velocityScale : null);
+      const annotations = [];
+      for (const [key, center] of Object.entries(centers)) {
+        const name = bodies[key].label;
+        if (accelerations && gravity?.visible) {
+          const source = key === trackedBody ? gravitySource : "total";
+          const { total, contributions } = accelerations[key];
+          const delta = toWorld(contributions[source] ?? total)
+            .setLength(frameDistance * (trackedBody ? 0.47 * focusFactor : 0.12));
+          if (key === trackedBody) delta.multiplyScalar(fitFocusVector(delta, frameDistance, width, height));
+          paintVector({
+            delta, name: source === "total" ? `g · ${name}` : `g · ${name} ← ${bodies[source].label}`,
+            color: GRAVITY_INK, gravity: true,
+            offset: trackedBody ? 0 : GRAVITY_ARROW_OFFSETS[key],
+          }, center, width, height, annotations);
+        }
+        if (showVelocityArrows && velocityScale) {
+          const delta = toWorld(velocities[key]).multiplyScalar(velocityScale);
+          paintVector({ delta, name: `v · ${name}`, color: bodies[key].color }, center, width, height, annotations);
+        }
+      }
+      if (!annotations.length) return;
+      for (const { headBounds } of annotations) occupied.push(headBounds);
+      paintVectorLabels(annotations, occupied, width, height);
     }
 
     function targetRadius() {
@@ -89,7 +292,8 @@
     }
 
     function draw() {
-      if (!contextAvailable || !stage.clientWidth || !stage.clientHeight) return;
+      const { clientWidth: width, clientHeight: height } = stage;
+      if (!contextAvailable || !width || !height) return;
       const near = Math.min(0.02, Math.max(1e-9, nearestSurface() / 4));
       const far = Math.max(30, camera.position.length() + 5);
       if (camera.near !== near || camera.far !== far) {
@@ -98,24 +302,48 @@
         camera.updateProjectionMatrix();
       }
       renderer.render(scene, camera);
-      cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
-      for (const [key, tip] of axes) placeLabel(labels[key], tip);
       const apparentSizes = {};
+      const centers = {};
+      const pixelsPerSlope = height * camera.projectionMatrix.elements[5] / 2;
       for (const [key, mesh] of Object.entries(meshes)) {
-        if (mesh.visible) {
-          const radius = mesh.scale.x;
-          const cameraPosition = mesh.position.clone().applyMatrix4(camera.matrixWorldInverse);
-          const pixelsPerSlope = stage.clientHeight * camera.projectionMatrix.elements[5] / 2;
-          const diameterPx = physics.apparentDiameterPx(radius, -cameraPosition.z, cameraPosition.y, pixelsPerSlope);
-          apparentSizes[key] = diameterPx;
-          const subpixel = diameterPx !== null && diameterPx < 1;
-          const label = labels[key];
-          label.toggleAttribute("data-subpixel", subpixel);
-          if (subpixel) label.setAttribute("aria-description", "Diâmetro aparente inferior a um pixel.");
-          else label.removeAttribute("aria-description");
-          placeLabel(label, mesh.position.clone().addScaledVector(cameraUp, radius));
+        if (!mesh.visible) continue;
+        const view = mesh.position.clone().applyMatrix4(camera.matrixWorldInverse);
+        const radius = mesh.scale.x;
+        const depth = -view.z;
+        const diameterPx = physics.apparentDiameterPx(radius, depth, view.y, pixelsPerSlope);
+        apparentSizes[key] = diameterPx;
+        if (diameterPx === null || depth > far) {
+          labels[key].hidden = true;
+          continue;
         }
+        const { x, y } = screenPoint(view, width, height);
+        const shift = pixelsPerSlope * radius ** 2 / (depth * (depth ** 2 - radius ** 2));
+        const cx = x + shift * view.x;
+        const cy = y - shift * view.y;
+        const halfWidth = Math.max(7, physics.apparentDiameterPx(radius, depth, view.x, pixelsPerSlope) / 2);
+        const halfHeight = Math.max(7, diameterPx / 2);
+        centers[key] = { x, y, view, diameterPx, silhouette: {
+          left: cx - halfWidth, top: cy - halfHeight, right: cx + halfWidth, bottom: cy + halfHeight,
+        } };
       }
+      const occupied = Object.values(centers).map(({ silhouette }) => silhouette);
+      for (const [key, center] of Object.entries(centers)) {
+        placeBodyLabel(labels[key], center, width, height, occupied);
+      }
+      const bounds = overlay.getBoundingClientRect();
+      for (const [key, tip] of axes) {
+        const label = labels[key];
+        placeLabel(label, tip);
+        if (label.hidden) continue;
+        const rect = label.getBoundingClientRect();
+        const box = {
+          left: rect.left - bounds.left, top: rect.top - bounds.top,
+          right: rect.right - bounds.left, bottom: rect.bottom - bounds.top,
+        };
+        label.hidden = occupied.some((other) => overlaps(box, other));
+        if (!label.hidden) occupied.push(box);
+      }
+      drawVectors(centers, width, height, occupied);
       onApparentSizes(apparentSizes);
     }
 
@@ -162,23 +390,6 @@
       path.visible = false;
       paths[key] = path;
       scene.add(path);
-      const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, 1, body.color);
-      arrow.name = `velocity-${key}`;
-      arrow.visible = false;
-      arrows[key] = arrow;
-      scene.add(arrow);
-    }
-
-    function updateArrows() {
-      for (const [key, arrow] of Object.entries(arrows)) {
-        const vector = velocities && toWorld(velocities[key]);
-        const length = vector ? vector.length() * physics.VELOCITY_VECTOR_SCALE : 0;
-        arrow.visible = showVelocityArrows && length > 0;
-        if (!arrow.visible) continue;
-        arrow.position.copy(meshes[key].position);
-        arrow.setDirection(vector.normalize());
-        arrow.setLength(length, Math.min(0.035, length * 0.25), Math.min(0.022, length * 0.16));
-      }
     }
 
     function setCurvature(visible) {
@@ -204,12 +415,81 @@
       draw();
     }
 
+    function createGravitySurface() {
+      const keys = Object.keys(bodies);
+      const material = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: {
+          sourceOffsets: { value: keys.map(() => new THREE.Vector3()) },
+          gmPerAu: { value: keys.map((key) => physics.GM_KM3_S2[key] / physics.AU_KM) },
+          radiiAu: { value: keys.map((key) => bodies[key].equatorialKm / physics.AU_KM) },
+          logLimits: { value: new THREE.Vector2(Math.log(300), Math.log(200_000)) },
+          farColor: { value: new THREE.Color("#3f8caa") },
+          middleColor: { value: new THREE.Color("#9a78d2") },
+          nearColor: { value: new THREE.Color("#eface2") },
+          fillOpacity: { value: 0.28 },
+        },
+        vertexShader: `
+          varying vec3 offsetAu;
+          void main() {
+            offsetAu = mat3(modelMatrix) * position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          varying vec3 offsetAu;
+          uniform vec3 sourceOffsets[3];
+          uniform float gmPerAu[3], radiiAu[3];
+          uniform vec2 logLimits;
+          uniform vec3 farColor, middleColor, nearColor;
+          uniform float fillOpacity;
+          void main() {
+            float magnitude = 0.0;
+            bool exterior = true;
+            for (int i = 0; i < 3; i++) {
+              float distanceAu = length(offsetAu - sourceOffsets[i]);
+              exterior = exterior && distanceAu >= radiiAu[i];
+              // Magnitude of Phi = -sum(GM / r) in km²/s².
+              magnitude += gmPerAu[i] / max(distanceAu, radiiAu[i]);
+            }
+            float t = clamp((log(magnitude) - logLimits.x) / (logLimits.y - logLimits.x), 0.0, 1.0);
+            vec3 color = t < 0.5 ? mix(farColor, middleColor, t * 2.0) : mix(middleColor, nearColor, t * 2.0 - 1.0);
+            float bands = t * 16.0;
+            float line = 1.0 - smoothstep(0.0, clamp(fwidth(bands), 0.025, 0.2), abs(fract(bands + 0.5) - 0.5));
+            float opacity = (fillOpacity + 0.43 * line) * (1.0 - smoothstep(1.86, 2.2, length(offsetAu)));
+            if (!exterior) discard;
+            gl_FragColor = vec4(color, opacity);
+            #include <colorspace_fragment>
+          }`,
+      });
+      const surface = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), material);
+      surface.name = "newtonian-potential";
+      surface.rotation.x = -Math.PI / 2;
+      surface.visible = false;
+      scene.add(surface);
+      return surface;
+    }
+
+    function updateGravitySurface() {
+      const sun = meshes.sun.position;
+      gravity.position.copy(sun);
+      if (trackedBody) gravity.position.y = meshes[trackedBody].position.y;
+      const offsets = gravity.material.uniforms.sourceOffsets.value;
+      for (const [i, mesh] of Object.values(meshes).entries()) offsets[i].copy(mesh.position).sub(gravity.position);
+      gravity.material.uniforms.fillOpacity.value = trackedBody ? 0.12 : 0.28;
+    }
+
     function resize() {
       const { clientWidth: width, clientHeight: height } = stage;
       if (!width || !height) return;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      const ratio = renderer.getPixelRatio();
+      overlay.width = Math.round(width * ratio);
+      overlay.height = Math.round(height * ratio);
+      ink.setTransform(overlay.width / width, 0, 0, overlay.height / height, 0, 0);
       draw();
     }
 
@@ -310,6 +590,7 @@
       trackedBody = key;
       controls.enabled = key !== null;
       for (const id of Object.keys(meshes)) labels[id].setAttribute("aria-pressed", String(id === key));
+      if (gravity?.visible && meshes.sun.visible) updateGravitySurface();
       onTarget(key);
     }
 
@@ -499,9 +780,16 @@
       zoom,
       setScale,
       setCurvature,
+      setGravityVisibility(visible) {
+        if (visible && !gravity) gravity = createGravitySurface();
+        if (gravity) gravity.visible = visible;
+      },
+      setGravitySource(source) {
+        gravitySource = source;
+        draw();
+      },
       setVelocityVisibility(visible) {
         showVelocityArrows = visible;
-        updateArrows();
         draw();
       },
       shiftReference(offset) {
@@ -520,14 +808,15 @@
           path.geometry = new THREE.BufferGeometry().setFromPoints(points);
         }
       },
-      showPositions(positions, frameVelocities) {
+      showPositions(positions, frameVelocities, frameAccelerations) {
         const pendingFocus = trackedBody && !meshes[trackedBody].visible;
         for (const [key, mesh] of Object.entries(meshes)) {
           mesh.position.copy(toWorld(positions[key]));
           mesh.visible = true;
         }
         velocities = frameVelocities;
-        updateArrows();
+        accelerations = frameAccelerations;
+        if (gravity?.visible) updateGravitySurface();
         sunlight.position.copy(meshes.sun.position);
         if (curvature) curvature.position.copy(meshes.sun.position);
         if (pendingFocus) {
@@ -545,7 +834,7 @@
       },
       select(key) {
         for (const id of Object.keys(meshes)) labels[id].classList.toggle("selected", id === key);
-        for (const [id, path] of Object.entries(paths)) path.material.opacity = id === key ? 0.88 : 0.48;
+        for (const [id, path] of Object.entries(paths)) path.material.opacity = id === key ? 0.62 : 0.38;
         draw();
       },
       focus,

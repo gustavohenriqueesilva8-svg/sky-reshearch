@@ -37,6 +37,20 @@ PY
 
 `vendor/three-gps.min.js` contém Three.js **0.181.2** e `OrbitControls`, empacotados em formato IIFE com esbuild 0.25.12 para uso local. [Código-fonte do Three.js](https://github.com/mrdoob/three.js/tree/r181) · [Licença MIT da biblioteca](vendor/three-LICENSE.txt)
 
+O módulo de entrada do pacote usa os exports abaixo.
+
+```js
+export {
+  AmbientLight, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, GridHelper, Group, Line,
+  LineBasicMaterial, LineSegments, Matrix3, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  PerspectiveCamera, PlaneGeometry, PointLight, Raycaster, Scene, ShaderMaterial, SphereGeometry,
+  Spherical, SRGBColorSpace, TextureLoader, Vector2, Vector3, WebGLRenderer,
+} from "three";
+export { OrbitControls } from "three/addons/controls/OrbitControls.js";
+```
+
+Gere o pacote com `esbuild entry.js --bundle --minify --legal-comments=inline --format=iife --global-name=SkyThree`. Remova os espaços ao fim das linhas do GLSL empacotado ao salvar o resultado em `vendor/three-gps.min.js`.
+
 `solar-demo.js` contém uma janela de 720 dias amostrada pelo mesmo código da API. Para regenerar o exemplo na raiz do repositório, com as dependências Python instaladas, execute:
 
 ```bash

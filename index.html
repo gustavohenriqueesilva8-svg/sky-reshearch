@@ -1305,12 +1305,13 @@
               <canvas tabindex="0" aria-label="Cena 3D do Sistema Solar" aria-describedby="gps-instructions">
                 Consulte as posições e distâncias na seção do astro selecionado.
               </canvas>
+              <canvas class="gps-vector-overlay" aria-hidden="true"></canvas>
               <span class="gps-scene-label gps-axis-x" data-scene-label="x" aria-hidden="true" hidden>+X</span>
               <span class="gps-scene-label gps-axis-y" data-scene-label="y" aria-hidden="true" hidden>+Y</span>
               <span class="gps-scene-label gps-axis-z" data-scene-label="z" aria-hidden="true" hidden>+Z</span>
-              <button class="gps-scene-label gps-sun" type="button" data-scene-label="sun" aria-label="Centralizar Sol na cena" aria-pressed="false" hidden>Sol</button>
-              <button class="gps-scene-label gps-earth" type="button" data-scene-label="earth" aria-label="Centralizar Terra na cena" aria-pressed="false" hidden>Terra</button>
-              <button class="gps-scene-label gps-mars" type="button" data-scene-label="mars" aria-label="Centralizar Marte na cena" aria-pressed="false" hidden>Marte</button>
+              <button class="gps-scene-label gps-sun" type="button" data-scene-label="sun" aria-label="Centralizar Sol na cena" aria-pressed="false" hidden><span>Sol</span></button>
+              <button class="gps-scene-label gps-earth" type="button" data-scene-label="earth" aria-label="Centralizar Terra na cena" aria-pressed="false" hidden><span>Terra</span></button>
+              <button class="gps-scene-label gps-mars" type="button" data-scene-label="mars" aria-label="Centralizar Marte na cena" aria-pressed="false" hidden><span>Marte</span></button>
               <p id="gps-render-error" role="status" hidden>Visualização 3D indisponível neste navegador. A cena requer WebGL 2.</p>
             </div>
             <figcaption>
@@ -1322,6 +1323,10 @@
                 <span class="gps-orbit-key gps-earth" id="gps-earth-track">Órbita da Terra</span>
                 <span class="gps-orbit-key gps-mars" id="gps-mars-track">Órbita de Marte</span>
                 <span>Segmentos entre posições de Astropy/ERFA no referencial selecionado. Transferência Terra–Marte indisponível.</span>
+              </div>
+              <div class="gps-vector-legend" id="gps-velocity-legend" hidden>
+                <span class="gps-velocity-key" aria-hidden="true">➜</span>
+                <span>Velocidade · <span id="gps-velocity-scale"></span></span>
               </div>
               <span id="gps-texture-status" role="status" hidden></span>
               <span id="gps-instructions">Arraste ou use as setas para olhar. Com um astro selecionado, esses controles giram ao redor dele. Use roda, pinça ou +/− para o zoom. Em navegação livre, use W/S, A/D e Q/E para mover, ou arraste com o botão direito, Shift ou dois dedos para deslocar a vista.</span>
@@ -1351,6 +1356,37 @@
           </section>
 
           <div class="gps-controls">
+            <section class="gps-panel gps-motion" aria-labelledby="gps-motion-title">
+              <h2 id="gps-motion-title">Movimento relativo</h2>
+              <label class="gps-reference">Referência do movimento
+                <select id="gps-reference">
+                  <option value="sun" selected>Sol</option>
+                  <option value="earth">Terra</option>
+                  <option value="mars">Marte</option>
+                </select>
+              </label>
+              <p id="gps-movement-clock">Tempo real · 1 s/s</p>
+              <dl class="gps-speeds" aria-label="Módulos das velocidades relativas" aria-describedby="gps-speed-axis">
+                <div class="gps-sun"><dt>Sol</dt><dd id="gps-speed-sun">—</dd><span class="gps-speed-track" aria-hidden="true"><span id="gps-speed-bar-sun"></span></span></div>
+                <div class="gps-earth"><dt>Terra</dt><dd id="gps-speed-earth">—</dd><span class="gps-speed-track" aria-hidden="true"><span id="gps-speed-bar-earth"></span></span></div>
+                <div class="gps-mars"><dt>Marte</dt><dd id="gps-speed-mars">—</dd><span class="gps-speed-track" aria-hidden="true"><span id="gps-speed-bar-mars"></span></span></div>
+              </dl>
+              <div class="gps-speed-axis" id="gps-speed-axis" hidden><span>0</span><span id="gps-speed-max"></span></div>
+              <label class="gps-check"><input id="gps-show-velocities" type="checkbox" checked> Vetores de velocidade</label>
+              <div class="gps-layers" role="group" aria-label="Camadas gravitacionais">
+                <label class="gps-check"><input id="gps-gravity" type="checkbox" aria-describedby="gps-gravity-info" aria-controls="gps-gravity-legend"> Campo gravitacional</label>
+                <div id="gps-gravity-legend" hidden>
+                  <p id="gps-gravity-info">Aproximação newtoniana para Sol, Terra e Marte. As cores mostram o módulo do potencial em escala logarítmica, num corte paralelo à grade que passa pelo Sol ou pelo astro em foco.</p>
+                  <div class="gps-potential-key">
+                    <span>300</span><span class="gps-potential-ramp" aria-hidden="true"></span><span>200.000 km²/s²</span>
+                  </div>
+                  <p><span class="gps-gravity-key" aria-hidden="true">┄▷</span> Aceleração gravitacional · as setas tracejadas indicam a direção. Consulte os módulos e as contribuições no painel do astro.</p>
+                </div>
+                <label class="gps-check"><input id="gps-curvature" type="checkbox" aria-describedby="gps-curvature-info" aria-controls="gps-curvature-info"> Curvatura espacial</label>
+                <p id="gps-curvature-info" hidden>Recorte espacial equatorial de Schwarzschild para um Sol esférico isolado, a tempo fixo. Altura ampliada 1.000×, da superfície do Sol até 2 ua.</p>
+              </div>
+            </section>
+
             <form id="gps-form" class="gps-panel gps-date">
               <h2 id="gps-clock-title">Tempo da simulação</h2>
               <div class="gps-actions" role="group" aria-labelledby="gps-clock-title">
@@ -1367,27 +1403,6 @@
               </div>
               <p id="gps-status" role="status"></p>
             </form>
-
-            <section class="gps-panel gps-motion" aria-labelledby="gps-motion-title">
-              <h2 id="gps-motion-title">Movimento relativo</h2>
-              <label class="gps-reference">Referência do movimento
-                <select id="gps-reference">
-                  <option value="sun" selected>Sol</option>
-                  <option value="earth">Terra</option>
-                  <option value="mars">Marte</option>
-                </select>
-              </label>
-              <p id="gps-movement-clock">Tempo real · 1 s/s</p>
-              <dl class="gps-speeds" aria-label="Módulos das velocidades relativas">
-                <div class="gps-sun"><dt>Sol</dt><dd id="gps-speed-sun">—</dd></div>
-                <div class="gps-earth"><dt>Terra</dt><dd id="gps-speed-earth">—</dd></div>
-                <div class="gps-mars"><dt>Marte</dt><dd id="gps-speed-mars">—</dd></div>
-              </dl>
-              <label class="gps-check"><input id="gps-show-velocities" type="checkbox" checked> Vetores de velocidade</label>
-              <p>Escala gráfica comum de 0,12 ua por 10 km/s.</p>
-              <label class="gps-check"><input id="gps-curvature" type="checkbox" aria-describedby="gps-curvature-info"> Curvatura espacial</label>
-              <p id="gps-curvature-info" hidden>Schwarzschild para um Sol esférico isolado, em corte equatorial a tempo fixo. Altura ampliada 1.000×, da superfície solar até 2 ua. Camada visual independente das efemérides.</p>
-            </section>
 
             <section class="gps-panel gps-targets" aria-labelledby="gps-targets-title">
               <h2 id="gps-targets-title">Astros da simulação</h2>
@@ -1411,12 +1426,19 @@
                 <div><dt>Z</dt><dd id="gps-coordinate-z"></dd></div>
               </dl>
               <dl class="gps-distances">
-                <div><dt>Diâmetro equatorial</dt><dd id="gps-body-diameter"></dd></div>
+                <div><dt>Diâmetro físico equatorial</dt><dd id="gps-body-diameter"></dd></div>
                 <div><dt>Diâmetro aparente aprox.</dt><dd id="gps-apparent">—</dd></div>
                 <div><dt>Distância ao Sol</dt><dd id="gps-distance-sun"></dd></div>
                 <div><dt>Distância à Terra</dt><dd id="gps-distance-earth"></dd></div>
                 <div id="gps-orbit-extent" hidden><dt>Distância ao Sol nas amostras</dt><dd id="gps-orbit-radii"></dd></div>
               </dl>
+              <div id="gps-gravity-readout" hidden>
+                <h3>Aceleração gravitacional</h3>
+                <dl class="gps-accelerations" id="gps-accelerations"></dl>
+                <label class="gps-reference" id="gps-gravity-focus" hidden>Vetor de aceleração no foco
+                  <select id="gps-gravity-source"></select>
+                </label>
+              </div>
             </section>
           </div>
         </div>

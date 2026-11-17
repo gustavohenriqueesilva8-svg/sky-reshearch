@@ -9,10 +9,12 @@
     earth: { equatorialKm: 6378.1, polarKm: 6356.8 },
     mars: { equatorialKm: 3396.2, polarKm: 3376.2 },
   };
+  // IAU nominal Sun, JPL DE440 Earth and JPL MAR097 Mars (planet alone).
+  // https://ssd.jpl.nasa.gov/sats/phys_par/
+  const GM_KM3_S2 = { sun: SOLAR_GM_KM3_S2, earth: 398_600.435507, mars: 42_828.37362 };
   const SCHWARZSCHILD_RADIUS_KM = 2 * SOLAR_GM_KM3_S2 / C_KM_S ** 2;
   const CURVATURE_OUTER_AU = 2;
   const CURVATURE_HEIGHT_SCALE = 1000;
-  const VELOCITY_VECTOR_SCALE = 0.012;
   const ZERO = { x: 0, y: 0, z: 0 };
 
   function subtract(a, b) {
@@ -23,6 +25,30 @@
     return Object.fromEntries(Object.entries(vectors).map(([body, vector]) => [
       body, subtract(vector, vectors[reference]),
     ]));
+  }
+
+  function accelerationFrom(position, sourcePosition, gm) {
+    const { x, y, z } = subtract(sourcePosition, position);
+    const distanceAu = Math.hypot(x, y, z);
+    // Δr is in au. Convert the resulting acceleration to m/s².
+    const factor = 1000 * gm / (AU_KM ** 2 * distanceAu ** 3);
+    return { x: x * factor, y: y * factor, z: z * factor };
+  }
+
+  function gravitationalAccelerations(positions) {
+    return Object.fromEntries(Object.keys(positions).map((body) => {
+      const contributions = {};
+      const total = { ...ZERO };
+      for (const [source, position] of Object.entries(positions)) {
+        if (source === body) continue;
+        const vector = accelerationFrom(positions[body], position, GM_KM3_S2[source]);
+        contributions[source] = vector;
+        total.x += vector.x;
+        total.y += vector.y;
+        total.z += vector.z;
+      }
+      return [body, { total, contributions }];
+    }));
   }
 
   function flammHeightKm(radiusKm) {
@@ -72,7 +98,7 @@
 
   window.gpsPhysics = {
     AU_KM, RADII_KM, SOLAR_GM_KM3_S2, SCHWARZSCHILD_RADIUS_KM, CURVATURE_HEIGHT_SCALE,
-    CURVATURE_OUTER_AU, VELOCITY_VECTOR_SCALE, ZERO, subtract, relativeVectors, flammHeightKm,
-    curvatureSurface, apparentDiameterPx,
+    CURVATURE_OUTER_AU, GM_KM3_S2, ZERO, subtract, relativeVectors, flammHeightKm,
+    curvatureSurface, apparentDiameterPx, accelerationFrom, gravitationalAccelerations,
   };
 })();

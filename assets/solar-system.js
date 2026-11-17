@@ -16,11 +16,19 @@
   });
   const formatDiameter = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
   const formatSpeed = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3, minimumFractionDigits: 3 });
+  const formatScale = new Intl.NumberFormat("pt-BR", { maximumSignificantDigits: 3 });
+  const formatAcceleration = new Intl.NumberFormat("pt-BR", {
+    notation: "scientific", maximumSignificantDigits: 4,
+  });
   const formatEpoch = (instant) => instant.replace("T", " ").replace("Z", " UTC");
   const inputInstant = (value) => `${value.length === 16 ? value + ":00" : value}Z`;
 
   function distance(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  }
+
+  function magnitude({ x, y, z }) {
+    return Math.hypot(x, y, z);
   }
 
   function showInstant(element, instant) {
@@ -52,6 +60,16 @@
     const playbackRate = find("#gps-playback-rate");
     const referenceSelect = find("#gps-reference");
     const speedLabels = Object.fromEntries(Object.keys(BODIES).map((body) => [body, find(`#gps-speed-${body}`)]));
+    const speedBars = Object.fromEntries(Object.keys(BODIES).map((body) => [body, find(`#gps-speed-bar-${body}`)]));
+    const speedAxis = find("#gps-speed-axis");
+    const speedMax = find("#gps-speed-max");
+    const velocityLegend = find("#gps-velocity-legend");
+    const velocityScale = find("#gps-velocity-scale");
+    const gravityToggle = find("#gps-gravity");
+    const gravityReadout = find("#gps-gravity-readout");
+    const gravityFocus = find("#gps-gravity-focus");
+    const gravitySelect = find("#gps-gravity-source");
+    const accelerationList = find("#gps-accelerations");
     const apparentLabel = find("#gps-apparent");
     const bodyButtons = root.querySelectorAll("[data-gps-body]");
     const clockButtons = root.querySelectorAll("[data-gps-clock]");
@@ -67,6 +85,8 @@
     let positions = null;
     let velocities = null;
     let framePositions = null;
+    let accelerations = null;
+    let gravityReadoutBody = null;
     let apparentSizes = {};
     let selected = "mars";
     let reference = "sun";
@@ -96,17 +116,63 @@
         find("#gps-orbit-radii").textContent =
           `${formatNumber.format(extent.min)}–${formatNumber.format(extent.max)} ua`;
       }
+      updateGravityReadout();
       readout.hidden = false;
+    }
+
+    function updateGravityReadout() {
+      const acceleration = accelerations?.[selected];
+      gravityReadout.hidden = !acceleration;
+      if (!acceleration) return;
+      const readings = { total: acceleration.total, ...acceleration.contributions };
+      if (gravityReadoutBody !== selected) {
+        gravityReadoutBody = selected;
+        const rows = [];
+        const options = [];
+        for (const source of Object.keys(readings)) {
+          const label = source === "total" ? "Resultante" : BODIES[source].label;
+          const row = document.createElement("div");
+          const name = document.createElement("dt");
+          name.textContent = label;
+          const value = document.createElement("dd");
+          value.dataset.gravityReading = source;
+          row.append(name, value);
+          rows.push(row);
+          options.push(new Option(label, source));
+        }
+        accelerationList.replaceChildren(...rows);
+        gravitySelect.replaceChildren(...options);
+      }
+      for (const value of accelerationList.querySelectorAll("dd")) {
+        value.textContent = `${formatAcceleration.format(magnitude(readings[value.dataset.gravityReading]))} m/s²`;
+      }
+    }
+
+    function showSpeeds(frameVelocities) {
+      const speeds = Object.fromEntries(Object.keys(BODIES).map((body) => [
+        body, frameVelocities ? magnitude(frameVelocities[body]) : null,
+      ]));
+      const maximum = Math.max(10, Math.ceil(Math.max(...Object.values(speeds)) / 10) * 10);
+      speedAxis.hidden = !frameVelocities;
+      speedMax.textContent = `${maximum} km/s`;
+      for (const [body, speed] of Object.entries(speeds)) {
+        speedLabels[body].textContent = speed === null ? "—" : `${formatSpeed.format(speed)} km/s`;
+        speedBars[body].style.width = `${100 * (speed ?? 0) / maximum}%`;
+      }
     }
 
     function updateApparentSize() {
       const pixels = apparentSizes[selected];
       const text = pixels == null ? "—" :
-        `${pixels < 1 ? formatSpeed.format(pixels) : formatDiameter.format(pixels)} px`;
+        `${pixels < 1 ? formatScale.format(pixels) : formatDiameter.format(pixels)} px`;
       if (apparentLabel.textContent !== text) apparentLabel.textContent = text;
     }
 
     function selectBody(key, center = true) {
+      if (key !== selected) {
+        gravitySelect.value = "total";
+        scene?.setGravitySource("total");
+      }
       selected = key;
       for (const button of bodyButtons) button.setAttribute("aria-pressed", String(button.dataset.gpsBody === key));
       scene?.select(key);
@@ -119,11 +185,9 @@
       if (!positions) return;
       framePositions = physics.relativeVectors(positions, reference);
       const frameVelocities = velocities && physics.relativeVectors(velocities, reference);
-      for (const [body, element] of Object.entries(speedLabels)) {
-        const vector = frameVelocities && frameVelocities[body];
-        element.textContent = vector ? `${formatSpeed.format(Math.hypot(vector.x, vector.y, vector.z))} km/s` : "—";
-      }
-      scene?.showPositions(framePositions, frameVelocities);
+      accelerations = gravityToggle.checked ? physics.gravitationalAccelerations(positions) : null;
+      showSpeeds(frameVelocities);
+      scene?.showPositions(framePositions, frameVelocities, accelerations);
       updateReadout();
     }
 
@@ -368,6 +432,12 @@
     });
     referenceSelect.addEventListener("change", () => setReference(referenceSelect.value));
     find("#gps-show-velocities").addEventListener("change", (event) => scene?.setVelocityVisibility(event.target.checked));
+    gravityToggle.addEventListener("change", () => {
+      find("#gps-gravity-legend").hidden = !gravityToggle.checked;
+      scene?.setGravityVisibility(gravityToggle.checked);
+      showFrame();
+    });
+    gravitySelect.addEventListener("change", () => scene?.setGravitySource(gravitySelect.value));
     find("#gps-curvature").addEventListener("change", (event) => {
       find("#gps-curvature-info").hidden = !event.target.checked;
       scene?.setCurvature(event.target.checked);
@@ -378,7 +448,7 @@
         const scale = button.dataset.gpsScale;
         for (const option of scaleButtons) option.setAttribute("aria-pressed", String(option === button));
         find("#gps-scale-note").textContent = scale === "real"
-          ? "Escala física. ◇ marca astros com diâmetro aparente inferior a 1 pixel. Selecione um rótulo para se aproximar."
+          ? "Diâmetros e distâncias na mesma escala. ◇ indica menos de 1 px. Selecione um astro para inspecionar em 3D."
           : "Diâmetros ampliados para leitura. Posições e distâncias em escala linear.";
         scene?.setScale(scale);
       });
@@ -419,6 +489,7 @@
               onTarget: (key) => {
                 find("#gps-camera-target").textContent = key ? `Foco em ${BODIES[key].label}` : "Navegação livre";
                 free.setAttribute("aria-pressed", String(key === null));
+                gravityFocus.hidden = key === null;
               },
               onMissingTextures: (names) => {
                 const notice = find("#gps-texture-status");
@@ -428,6 +499,13 @@
               onApparentSizes: (sizes) => {
                 apparentSizes = sizes;
                 updateApparentSize();
+              },
+              onVelocityScale: (scale) => {
+                velocityLegend.hidden = scale === null;
+                if (scale !== null) {
+                  const text = `${formatScale.format(10 * scale)} ua por 10 km/s`;
+                  if (velocityScale.textContent !== text) velocityScale.textContent = text;
+                }
               },
             });
             selectBody(selected, false);
