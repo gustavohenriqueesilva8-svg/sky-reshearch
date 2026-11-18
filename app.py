@@ -1388,10 +1388,13 @@ async def get_motion_video(
                 for metadata in (metadata1, metadata2):
                     metadata["projection"] = [header.get("CTYPE1", "N/A"), header.get("CTYPE2", "N/A")]
             except LookupError as exc:
+                logger.info("Par temporal SPHEREx indisponível", exc_info=True)
                 if source == "spherex":
-                    raise HTTPException(status_code=404, detail=str(exc)) from exc
+                    raise HTTPException(
+                        status_code=404, detail="Sem par temporal SPHEREx com cobertura nesta região.",
+                    ) from exc
                 selected_source = "optical"
-                fallback_reason = str(exc)
+                fallback_reason = "Sem par temporal SPHEREx com cobertura nesta região."
             except Exception as exc:
                 logger.exception("Falha no serviço SPHEREx ao preparar blink animado")
                 if source == "spherex":

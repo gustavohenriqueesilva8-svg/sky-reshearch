@@ -224,20 +224,21 @@ class ApiTests(unittest.TestCase):
     @patch.object(app.SkyView, "get_images")
     @patch.object(app, "fetch_spherex_temporal_pair", new_callable=AsyncMock)
     def test_motion_video_upstream_errors_stay_in_server_logs(self, mocked_pair, mocked_skyview):
-        mocked_pair.side_effect = RuntimeError("private upstream token and internal path")
         mocked_skyview.side_effect = self.fake_skyview
-        for source, expected_status in (("auto", 200), ("spherex", 502)):
-            with self.subTest(source=source), self.assertLogs(app.logger, level="ERROR") as logs:
-                response = self.client.get("/api/motion_video", params={
-                    "ra": "10", "dec": "20", "source": source, "include_gif": "false",
-                })
-            self.assertEqual(response.status_code, expected_status)
-            self.assertNotIn("private upstream", response.text)
-            self.assertNotIn("RuntimeError", response.text)
-            self.assertIn("private upstream", "\n".join(logs.output))
-            if source == "auto":
-                self.assertEqual(response.json()["source"], "optical")
-                self.assertIn("DSS1/DSS2", response.json()["fallback_reason"])
+        for error_type, failure_status in ((RuntimeError, 502), (LookupError, 404)):
+            mocked_pair.side_effect = error_type("private upstream token and internal path")
+            for source, expected_status in (("auto", 200), ("spherex", failure_status)):
+                with self.subTest(source=source, error=error_type), self.assertLogs(app.logger, level="INFO") as logs:
+                    response = self.client.get("/api/motion_video", params={
+                        "ra": "10", "dec": "20", "source": source, "include_gif": "false",
+                    })
+                self.assertEqual(response.status_code, expected_status)
+                self.assertNotIn("private upstream", response.text)
+                self.assertNotIn(error_type.__name__, response.text)
+                self.assertIn("private upstream", "\n".join(logs.output))
+                if source == "auto":
+                    self.assertEqual(response.json()["source"], "optical")
+                    self.assertTrue(response.json()["fallback_reason"])
 
     def test_spherex_cutout_url_merges_query_parameters(self):
         position = app.SkyCoord(15.5, -30.2, unit="deg")
