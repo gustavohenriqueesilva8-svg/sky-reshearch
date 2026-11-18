@@ -188,7 +188,7 @@ def _open_cube_hdul(access_url: str):
             memmap=False,
         )
     except Exception:
-        if "nasa-irsa-spherex.s3.us-east-1.amazonaws.com" in str(access_url):
+        if urlsplit(str(access_url)).hostname == "nasa-irsa-spherex.s3.us-east-1.amazonaws.com":
             # Do not silently turn an S3 Range failure into a 300+ MB whole-cube download.
             raise
         # The IRSA HTTP server may reject range requests; retry with normal HTTP I/O.
@@ -1264,12 +1264,9 @@ async def get_spherex_band_image(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Falha ao consultar SPHEREx DR1 band %s", band)
-        cause = exc
-        while cause.__cause__ is not None:
-            cause = cause.__cause__
         raise HTTPException(
             status_code=502,
-            detail=f"Falha ao consultar ou processar o cubo SPHEREx DR1 no IRSA ({type(cause).__name__}: {cause}).",
+            detail="Falha ao consultar ou processar o cubo SPHEREx DR1 no IRSA.",
         ) from exc
 
 
@@ -1404,8 +1401,7 @@ async def get_motion_video(
                     ) from exc
                 selected_source = "optical"
                 fallback_reason = (
-                    "SPHEREx indisponível; usando imagens observadas DSS1/DSS2 do SkyView. "
-                    f"Detalhe técnico: {type(exc).__name__}: {exc}"
+                    "SPHEREx indisponível; usando imagens observadas DSS1/DSS2 do SkyView."
                 )
 
         if selected_source == "optical":

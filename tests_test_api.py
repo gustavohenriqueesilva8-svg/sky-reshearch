@@ -221,6 +221,24 @@ class ApiTests(unittest.TestCase):
         self.assertIn("Sem par temporal", payload["fallback_reason"])
         self.assertEqual(payload["comparison_type"], "epoch_crossfade")
 
+    @patch.object(app.SkyView, "get_images")
+    @patch.object(app, "fetch_spherex_temporal_pair", new_callable=AsyncMock)
+    def test_motion_video_upstream_errors_stay_in_server_logs(self, mocked_pair, mocked_skyview):
+        mocked_pair.side_effect = RuntimeError("private upstream token and internal path")
+        mocked_skyview.side_effect = self.fake_skyview
+        for source, expected_status in (("auto", 200), ("spherex", 502)):
+            with self.subTest(source=source), self.assertLogs(app.logger, level="ERROR") as logs:
+                response = self.client.get("/api/motion_video", params={
+                    "ra": "10", "dec": "20", "source": source, "include_gif": "false",
+                })
+            self.assertEqual(response.status_code, expected_status)
+            self.assertNotIn("private upstream", response.text)
+            self.assertNotIn("RuntimeError", response.text)
+            self.assertIn("private upstream", "\n".join(logs.output))
+            if source == "auto":
+                self.assertEqual(response.json()["source"], "optical")
+                self.assertIn("DSS1/DSS2", response.json()["fallback_reason"])
+
     def test_spherex_cutout_url_merges_query_parameters(self):
         position = app.SkyCoord(15.5, -30.2, unit="deg")
         url = app._cutout_url(
@@ -425,11 +443,48 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(mocked_sia.return_value.search.call_args.kwargs["collection"], "spherex_dr1_cube")
 
     @patch.object(app, "fetch_spherex_cutout", new_callable=AsyncMock)
-    def test_spherex_band_502_exposes_root_cause_for_debugging(self, mocked_fetch):
-        mocked_fetch.side_effect = RuntimeError("HTTP range request was rejected")
-        response = self.client.get("/api/spherex/band", params={"ra": "10", "dec": "20"})
+    def test_spherex_band_502_keeps_root_cause_in_server_logs(self, mocked_fetch):
+        error = RuntimeError("HTTP range request was rejected")
+        error.__cause__ = OSError("private upstream token and internal path")
+        mocked_fetch.side_effect = error
+        with self.assertLogs(app.logger, level="ERROR") as logs:
+            response = self.client.get("/api/spherex/band", params={"ra": "10", "dec": "20"})
         self.assertEqual(response.status_code, 502)
-        self.assertIn("HTTP range request was rejected", response.json()["detail"])
+        self.assertEqual(response.json()["detail"], "Falha ao consultar ou processar o cubo SPHEREx DR1 no IRSA.")
+        self.assertNotIn("private upstream", response.text)
+        self.assertNotIn("RuntimeError", response.text)
+        self.assertIn("private upstream", "\n".join(logs.output))
+
+    @patch.object(app.fits, "open")
+    def test_s3_cube_range_failure_never_downloads_the_whole_cube(self, mocked_open):
+        for host in ("nasa-irsa-spherex.s3.us-east-1.amazonaws.com", "NASA-IRSA-SPHEREX.S3.US-EAST-1.AMAZONAWS.COM:443"):
+            with self.subTest(host=host):
+                mocked_open.reset_mock()
+                mocked_open.side_effect = OSError("Range unavailable")
+                with self.assertRaisesRegex(OSError, "Range unavailable"):
+                    with app._open_cube_hdul(f"https://{host}/cube.fits"):
+                        self.fail("A failed S3 range read must propagate")
+                mocked_open.assert_called_once()
+                self.assertTrue(mocked_open.call_args.kwargs["use_fsspec"])
+
+    @patch.object(app.fits, "open")
+    def test_cube_range_fallback_uses_the_parsed_hostname(self, mocked_open):
+        s3_host = "nasa-irsa-spherex.s3.us-east-1.amazonaws.com"
+        for url in (
+            f"https://example.test/{s3_host}/cube.fits",
+            f"https://example.test/cube.fits?source={s3_host}",
+            f"https://example.test/cube.fits#{s3_host}",
+            f"https://{s3_host}@example.test/cube.fits",
+            f"https://{s3_host}.example.test/cube.fits",
+        ):
+            with self.subTest(url=url):
+                mocked_open.reset_mock()
+                with tempfile.TemporaryFile() as placeholder:
+                    mocked_open.side_effect = [OSError("Range unavailable"), placeholder]
+                    with app._open_cube_hdul(url) as result:
+                        self.assertIs(result, placeholder)
+                self.assertEqual(mocked_open.call_count, 2)
+                mocked_open.assert_called_with(url, cache=False, memmap=False)
 
     @patch.object(app, "fetch_spherex_cube_spectrum", new_callable=AsyncMock)
     def test_spherex_spectrum_endpoint_returns_cube_values_and_png(self, mocked_fetch):
